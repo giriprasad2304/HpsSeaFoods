@@ -1,0 +1,389 @@
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  STAFF
+  ACCOUNTANT
+}
+
+enum PurchaseStatus {
+  DRAFT
+  RECEIVED
+  INSPECTED
+  COMPLETED
+  CANCELLED
+}
+
+enum SaleStatus {
+  DRAFT
+  CONFIRMED
+  PACKED
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  UNPAID
+  PARTIAL
+  PAID
+  REFUNDED
+}
+
+enum PaymentType {
+  CUSTOMER_RECEIPT
+  SUPPLIER_PAYMENT
+  EXPENSE_PAYMENT
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  CHEQUE
+  UPI
+  CREDIT_CARD
+}
+
+enum InventoryTransactionType {
+  PURCHASE_INWARD
+  SALE_OUTWARD
+  WASTAGE_OUTWARD
+  ADJUSTMENT_INWARD
+  ADJUSTMENT_OUTWARD
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  PAID
+  PARTIAL
+  CANCELLED
+  OVERDUE
+}
+
+model User {
+  id         String     @id @default(cuid())
+  supabaseId String     @unique
+  email      String     @unique
+  name       String?
+  role       Role       @default(STAFF)
+  phone      String?
+  isActive   Boolean    @default(true)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  auditLogs  AuditLog[]
+
+  @@map("users")
+}
+
+model Supplier {
+  id             String     @id @default(cuid())
+  code           String     @unique
+  name           String
+  harborLocation String?
+  boatName       String?
+  contactPerson  String?
+  phone          String
+  email          String?
+  taxNumber      String?
+  address        String?
+  balance        Float      @default(0.0)
+  rating         Float      @default(5.0)
+  isActive       Boolean    @default(true)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  purchases      Purchase[]
+  payments       Payment[]
+
+  @@map("suppliers")
+}
+
+model Customer {
+  id                 String     @id @default(cuid())
+  code               String     @unique
+  name               String
+  companyName        String?
+  customerType       String     @default("Wholesale")
+  email              String?
+  phone              String
+  deliveryAddress    String?
+  creditLimit        Float      @default(50000.0)
+  outstandingBalance Float      @default(0.0)
+  paymentTermsDays   Int        @default(15)
+  isActive           Boolean    @default(true)
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+  sales              Sale[]
+  invoices           Invoice[]
+  payments           Payment[]
+
+  @@map("customers")
+}
+
+model FishType {
+  id                    String                 @id @default(cuid())
+  code                  String                 @unique
+  name                  String
+  scientificName        String?
+  category              String                 @default("Pelagic")
+  grade                 String?                @default("Grade A")
+  description           String?
+  imageUrl              String?
+  isActive              Boolean                @default(true)
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  purchaseItems         PurchaseItem[]
+  saleItems             SaleItem[]
+  inventoryTransactions InventoryTransaction[]
+
+  @@map("fish_types")
+}
+
+model Purchase {
+  id               String         @id @default(cuid())
+  purchaseNumber   String         @unique
+  supplierId       String
+  supplier         Supplier       @relation(fields: [supplierId], references: [id])
+  purchaseDate     DateTime       @default(now())
+  status           PurchaseStatus @default(RECEIVED)
+  totalWeightKg    Float          @default(0.0)
+  subtotal         Float          @default(0.0) // Sum of items (Quantity * Rate/kg)
+  transportCharges Float          @default(0.0)
+  iceCharges       Float          @default(0.0)
+  labourCharges    Float          @default(0.0)
+  totalAmount      Float          @default(0.0) // Subtotal + Transport + Ice + Labour
+  paidAmount       Float          @default(0.0)
+  balanceAmount    Float          @default(0.0) // Outstanding = TotalAmount - PaidAmount
+  paymentStatus    PaymentStatus  @default(UNPAID)
+  paymentMethod    PaymentMethod  @default(BANK_TRANSFER)
+  landingHarbor    String?
+  truckNumber      String?
+  invoiceUrl       String?
+  invoiceFileName  String?
+  invoiceFileType  String?
+  invoiceFileSize  Int?
+  notes            String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  items            PurchaseItem[]
+  payments         Payment[]
+
+  @@map("purchases")
+}
+
+model PurchaseItem {
+  id                    String                 @id @default(cuid())
+  purchaseId            String
+  purchase              Purchase               @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  fishTypeId            String
+  fishType              FishType               @relation(fields: [fishTypeId], references: [id])
+  grade                 String                 @default("Grade A")
+  fishCount             Int?
+  weightKg              Float // Quantity in kg
+  unitPricePerKg        Float // Rate per kg
+  totalCost             Float // Quantity * Rate per kg
+  temperatureC          Float?
+  notes                 String?
+  createdAt             DateTime               @default(now())
+  inventoryTransactions InventoryTransaction[]
+
+  @@map("purchase_items")
+}
+
+model Sale {
+  id             String        @id @default(cuid())
+  saleNumber     String        @unique
+  customerId     String
+  customer       Customer      @relation(fields: [customerId], references: [id])
+  saleDate       DateTime      @default(now())
+  deliveryDate   DateTime?
+  status         SaleStatus    @default(DRAFT)
+  paymentStatus  PaymentStatus @default(UNPAID)
+  subtotal       Float         @default(0.0)
+  taxAmount      Float         @default(0.0)
+  discountAmount Float         @default(0.0)
+  totalAmount    Float         @default(0.0)
+  paidAmount     Float         @default(0.0)
+  balanceAmount  Float         @default(0.0)
+  notes          String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  items          SaleItem[]
+  payments       Payment[]
+  packingCosts   PackingCost[]
+  invoice        Invoice?
+
+  @@map("sales")
+}
+
+model SaleItem {
+  id                    String                 @id @default(cuid())
+  saleId                String
+  sale                  Sale                   @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  fishTypeId            String
+  fishType              FishType               @relation(fields: [fishTypeId], references: [id])
+  grade                 String                 @default("Grade A")
+  weightKg              Float
+  unitPricePerKg        Float
+  totalPrice            Float
+  notes                 String?
+  createdAt             DateTime               @default(now())
+  inventoryTransactions InventoryTransaction[]
+
+  @@map("sale_items")
+}
+
+model InventoryTransaction {
+  id              String                   @id @default(cuid())
+  fishTypeId      String
+  fishType        FishType                 @relation(fields: [fishTypeId], references: [id])
+  transactionType InventoryTransactionType
+  quantityKg      Float // Positive for inward/adjustments (+), negative for sales/wastage (-)
+  unitCost        Float?
+  purchaseItemId  String?
+  purchaseItem    PurchaseItem?            @relation(fields: [purchaseItemId], references: [id], onDelete: SetNull)
+  saleItemId      String?
+  saleItem        SaleItem?                @relation(fields: [saleItemId], references: [id], onDelete: SetNull)
+  batchLotNumber  String?
+  storageLocation String?
+  notes           String?
+  createdAt       DateTime                 @default(now())
+
+  @@index([fishTypeId])
+  @@index([transactionType])
+  @@map("inventory_transactions")
+}
+
+model PackingCost {
+  id                  String   @id @default(cuid())
+  saleId              String?
+  sale                Sale?    @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  packingType         String   @default("Thermocol Export Packing") // e.g., "10kg Thermocol Box", "Dry Ice 5kg", "Poly Crate"
+  thermocolBoxesCount Int      @default(0) // Number of Thermocol Boxes
+  costPerBox          Float    @default(0.0) // Cost per Box
+  thermocolCost       Float    @default(0.0) // Number of Boxes * Cost per Box
+  iceCost             Float    @default(0.0) // Ice Cost
+  oxygenCost          Float    @default(0.0) // Oxygen Cost
+  packingMaterialCost Float    @default(0.0) // Packing Material Cost
+  labourCost          Float    @default(0.0) // Labour Cost
+  transportCost       Float    @default(0.0) // Transport Cost
+  quantityKg          Float    @default(0.0) // Quantity in kg
+  totalCost           Float    @default(0.0) // Total Packing Cost
+  costPerKg           Float    @default(0.0) // Total Packing Cost / Quantity
+  notes               String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@map("packing_costs")
+}
+
+model Invoice {
+  id             String        @id @default(cuid())
+  invoiceNumber  String        @unique
+  saleId         String        @unique
+  sale           Sale          @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  customerId     String
+  customer       Customer      @relation(fields: [customerId], references: [id])
+  invoiceDate    DateTime      @default(now())
+  dueDate        DateTime?
+  subtotal       Float
+  taxAmount      Float         @default(0.0)
+  discountAmount Float         @default(0.0)
+  totalAmount    Float
+  paidAmount     Float         @default(0.0)
+  balanceAmount  Float         @default(0.0)
+  status         InvoiceStatus @default(ISSUED)
+  pdfUrl         String?
+  notes          String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@map("invoices")
+}
+
+model ExpenseCategory {
+  id          String    @id @default(cuid())
+  code        String    @unique
+  name        String
+  description String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  expenses    Expense[]
+
+  @@map("expense_categories")
+}
+
+model Expense {
+  id              String          @id @default(cuid())
+  expenseNumber   String          @unique
+  categoryId      String
+  category        ExpenseCategory @relation(fields: [categoryId], references: [id])
+  title           String
+  description     String?
+  amount          Float
+  paidTo          String?
+  paymentMethod   PaymentMethod   @default(CASH)
+  expenseDate     DateTime        @default(now())
+  receiptUrl      String?
+  invoiceUrl      String?
+  invoiceFileName String?
+  notes           String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  payments        Payment[]
+
+  @@map("expenses")
+}
+
+model Payment {
+  id              String        @id @default(cuid())
+  paymentNumber   String        @unique
+  paymentType     PaymentType
+  amount          Float
+  paymentMethod   PaymentMethod @default(BANK_TRANSFER)
+  paymentDate     DateTime      @default(now())
+  referenceNumber String?
+  notes           String?
+  customerId      String?
+  customer        Customer?     @relation(fields: [customerId], references: [id])
+  supplierId      String?
+  supplier        Supplier?     @relation(fields: [supplierId], references: [id])
+  saleId          String?
+  sale            Sale?         @relation(fields: [saleId], references: [id])
+  purchaseId      String?
+  purchase        Purchase?     @relation(fields: [purchaseId], references: [id])
+  expenseId       String?
+  expense         Expense?      @relation(fields: [expenseId], references: [id])
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@map("payments")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String
+  entity    String
+  entityId  String?
+  metadata  Json?
+  ipAddress String?
+  userAgent String?
+  timestamp DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@index([userId])
+  @@map("audit_logs")
+}
