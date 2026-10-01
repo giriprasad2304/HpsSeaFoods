@@ -28,6 +28,7 @@ export const expenseFormSchema = z.object({
     .positive("Amount must be greater than 0"),
   paidTo: z.string().optional(),
   paymentMethod: PaymentMethodEnum.default("CASH"),
+  saleId: z.string().optional().nullable().or(z.literal("")),
   invoiceUrl: z.string().url("Invalid invoice URL").optional().nullable().or(z.literal("")),
   invoiceFileName: z.string().optional().nullable().or(z.literal("")),
   notes: z.string().optional(),

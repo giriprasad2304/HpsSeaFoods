@@ -252,10 +252,26 @@ export interface ExpenseDTO {
   paidTo?: string | null;
   paymentMethod: PaymentMethod;
   expenseDate: string;
+  saleId?: string | null;
+  saleNumber?: string | null;
+  customerName?: string | null;
   receiptUrl?: string | null;
   invoiceUrl?: string | null;
   invoiceFileName?: string | null;
   notes?: string | null;
+}
+
+export interface ExpenseSaleLookupDTO {
+  id: string;
+  saleNumber: string;
+  customerName: string;
+  saleDate: string;
+  totalAmount: number;
+}
+
+export interface ExpenseLookupsDTO {
+  categories: ExpenseCategoryDTO[];
+  sales: ExpenseSaleLookupDTO[];
 }
 
 export interface PaymentDTO {

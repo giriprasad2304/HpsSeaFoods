@@ -15,6 +15,8 @@ import {
   Building,
   User,
   CheckCircle,
+  Receipt,
+  Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -198,6 +200,13 @@ export function SaleDetails({ sale }: SaleDetailsProps) {
               Record Payment
             </Button>
           )}
+
+          <Link href={`/expenses/new?saleId=${sale.id}`}>
+            <Button variant="outline" size="sm" className="gap-1.5 text-xs">
+              <Receipt className="h-3.5 w-3.5 text-amber-500" />
+              Add Expense
+            </Button>
+          </Link>
 
           <Button
             variant="outline"
@@ -497,6 +506,79 @@ export function SaleDetails({ sale }: SaleDetailsProps) {
               </CardContent>
             </Card>
           )}
+
+          {/* Linked Direct Expenses */}
+          <Card>
+            <CardHeader className="pb-4 flex flex-row items-center justify-between">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Receipt className="h-4 w-4 text-amber-500" />
+                Linked Order Expenses ({(sale.expenses || []).length})
+              </CardTitle>
+              <Link href={`/expenses/new?saleId=${sale.id}`}>
+                <Button size="sm" variant="outline" className="h-7 text-xs gap-1">
+                  <Plus className="h-3 w-3" /> Add Expense
+                </Button>
+              </Link>
+            </CardHeader>
+            <CardContent className="p-0">
+              {(sale.expenses || []).length > 0 ? (
+                <div className="overflow-x-auto">
+                  <Table className="min-w-[500px]">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Expense #</TableHead>
+                        <TableHead>Title / Purpose</TableHead>
+                        <TableHead>Category</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Payment</TableHead>
+                        <TableHead className="text-right">Amount</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(sale.expenses || []).map((exp) => (
+                        <TableRow key={exp.id}>
+                          <TableCell className="text-xs font-mono font-semibold text-primary">
+                            {exp.expenseNumber}
+                          </TableCell>
+                          <TableCell className="text-xs font-medium">
+                            {exp.title}
+                            {exp.invoiceUrl && (
+                              <a
+                                href={exp.invoiceUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="ml-2 text-[10px] text-primary hover:underline"
+                              >
+                                [Doc ↗]
+                              </a>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            <Badge variant="outline" className="text-[10px]">
+                              {exp.categoryName}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {formatDate(exp.expenseDate)}
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            {formatPaymentMethod(exp.paymentMethod)}
+                          </TableCell>
+                          <TableCell className="text-right text-xs font-mono font-semibold text-amber-600 dark:text-amber-400">
+                            {formatCurrency(exp.amount)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : (
+                <div className="p-5 text-center text-xs text-muted-foreground">
+                  No direct expenses linked to this sale yet. Use &ldquo;Add Expense&rdquo; above to link packing, ice, or freight costs.
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
         {/* Right Column: Financial Breakdown */}

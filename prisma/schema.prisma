@@ -220,6 +220,7 @@ model Sale {
   items          SaleItem[]
   payments       Payment[]
   packingCosts   PackingCost[]
+  expenses       Expense[]
   invoice        Invoice?
 
   @@map("sales")
@@ -338,10 +339,13 @@ model Expense {
   invoiceUrl      String?
   invoiceFileName String?
   notes           String?
+  saleId          String?
+  sale            Sale?           @relation(fields: [saleId], references: [id], onDelete: SetNull)
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
   payments        Payment[]
 
+  @@index([saleId])
   @@map("expenses")
 }
 

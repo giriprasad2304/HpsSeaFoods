@@ -1007,3 +1007,53 @@ function getMockPurchasesList(): PurchaseDTO[] {
 
 // Backward compatibility alias
 export const getPurchasesList = listPurchases;
+
+/**
+ * Creates a new supplier / boat / company on the fly
+ */
+export async function createSupplier(data: {
+  name: string;
+  phone: string;
+  boatName?: string;
+  harborLocation?: string;
+  contactPerson?: string;
+  email?: string;
+  taxNumber?: string;
+  address?: string;
+}) {
+  const count = await prisma.supplier.count();
+  const code = `SUP-${String(count + 1).padStart(3, "0")}-${Date.now().toString().slice(-4)}`;
+
+  const supplier = await prisma.supplier.create({
+    data: {
+      code,
+      name: data.name.trim(),
+      phone: data.phone.trim(),
+      boatName: data.boatName?.trim() || null,
+      harborLocation: data.harborLocation?.trim() || null,
+      contactPerson: data.contactPerson?.trim() || null,
+      email: data.email?.trim() || null,
+      taxNumber: data.taxNumber?.trim() || null,
+      address: data.address?.trim() || null,
+      balance: 0,
+      rating: 5.0,
+      isActive: true,
+    },
+  });
+
+  return {
+    id: supplier.id,
+    code: supplier.code,
+    name: supplier.name,
+    harborLocation: supplier.harborLocation,
+    boatName: supplier.boatName,
+    contactPerson: supplier.contactPerson,
+    phone: supplier.phone,
+    email: supplier.email,
+    taxNumber: supplier.taxNumber,
+    address: supplier.address,
+    balance: supplier.balance,
+    rating: supplier.rating,
+    isActive: supplier.isActive,
+  };
+}

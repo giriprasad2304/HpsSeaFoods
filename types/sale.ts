@@ -98,6 +98,18 @@ export interface SaleDetailDTO {
     referenceNumber?: string | null;
     notes?: string | null;
   }>;
+  expenses?: Array<{
+    id: string;
+    expenseNumber: string;
+    title: string;
+    categoryName: string;
+    amount: number;
+    paymentMethod: PaymentMethod;
+    expenseDate: string;
+    paidTo?: string | null;
+    invoiceUrl?: string | null;
+    invoiceFileName?: string | null;
+  }>;
 }
 
 export interface SaleFilterParams {

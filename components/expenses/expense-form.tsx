@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -15,20 +15,26 @@ import {
   Loader2,
   AlertCircle,
   FileText,
+  ShoppingBag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { expenseFormSchema, type ExpenseFormValues } from "@/validations/expense.schema";
-import type { ExpenseCategoryDTO } from "@/types";
+import type { ExpenseCategoryDTO, ExpenseSaleLookupDTO } from "@/types";
+import { formatCurrency } from "@/lib/utils";
 
 interface ExpenseFormProps {
   categories: ExpenseCategoryDTO[];
+  sales?: ExpenseSaleLookupDTO[];
 }
 
-export function ExpenseForm({ categories }: ExpenseFormProps) {
+export function ExpenseForm({ categories, sales = [] }: ExpenseFormProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const preselectedSaleId = searchParams.get("saleId") || "";
+
   const [loading, setLoading] = React.useState(false);
   const [uploading, setUploading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -37,6 +43,7 @@ export function ExpenseForm({ categories }: ExpenseFormProps) {
   const [formData, setFormData] = React.useState<Partial<ExpenseFormValues>>({
     expenseDate: new Date().toISOString().slice(0, 16),
     categoryId: categories[0]?.id || "",
+    saleId: preselectedSaleId,
     title: "",
     description: "",
     amount: undefined,
@@ -88,6 +95,7 @@ export function ExpenseForm({ categories }: ExpenseFormProps) {
     const payload = {
       expenseDate: formData.expenseDate ? new Date(formData.expenseDate).toISOString() : new Date().toISOString(),
       categoryId: formData.categoryId,
+      saleId: formData.saleId && formData.saleId !== "" ? formData.saleId : undefined,
       title: formData.title,
       description: formData.description || "",
       amount: Number(formData.amount),
@@ -208,6 +216,35 @@ export function ExpenseForm({ categories }: ExpenseFormProps) {
                 ))}
               </Select>
             </div>
+          </div>
+
+          {/* Linked Sale Order (Optional) */}
+          <div className="space-y-1.5 p-3 rounded-lg border border-primary/20 bg-primary/5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                <ShoppingBag className="h-4 w-4 text-primary" /> Link to Specific Sale Order (Optional)
+              </label>
+              {formData.saleId && (
+                <span className="text-[11px] font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                  Sale-specific expense
+                </span>
+              )}
+            </div>
+            <Select
+              value={formData.saleId || ""}
+              onChange={(e) => setFormData({ ...formData, saleId: e.target.value })}
+              className="h-9.5 text-xs sm:text-sm bg-background"
+            >
+              <option value="">-- None / General Operational Expense --</option>
+              {sales.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.saleNumber} — {s.customerName} ({formatCurrency(s.totalAmount)} · {new Date(s.saleDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" })})
+                </option>
+              ))}
+            </Select>
+            <p className="text-[11px] text-muted-foreground">
+              Select a sale if this expense (e.g. specialized thermocol packing, ice, or direct dispatch truck) applies to a specific customer order.
+            </p>
           </div>
 
           {/* Title */}

@@ -12,3 +12,17 @@ export async function GET() {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const { createCustomer } = await import("@/services/sales");
+    const newCustomer = await createCustomer(body);
+    return NextResponse.json({ data: newCustomer }, { status: 201 });
+  } catch (error: unknown) {
+    const message =
+      error instanceof Error ? error.message : "Failed to create customer";
+    console.error("[Customer Create Error]:", message);
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
+}

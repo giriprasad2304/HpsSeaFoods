@@ -308,6 +308,12 @@ export async function getSaleById(id: string): Promise<SaleDetailDTO | null> {
         payments: {
           orderBy: { paymentDate: "desc" },
         },
+        expenses: {
+          include: {
+            category: true,
+          },
+          orderBy: { expenseDate: "desc" },
+        },
       },
     });
 
@@ -360,10 +366,70 @@ export async function getSaleById(id: string): Promise<SaleDetailDTO | null> {
         referenceNumber: p.referenceNumber,
         notes: p.notes,
       })),
+      expenses: (sale.expenses || []).map((e) => ({
+        id: e.id,
+        expenseNumber: e.expenseNumber,
+        title: e.title,
+        categoryName: e.category.name,
+        amount: e.amount,
+        paymentMethod: e.paymentMethod,
+        expenseDate: e.expenseDate.toISOString(),
+        paidTo: e.paidTo,
+        invoiceUrl: e.invoiceUrl,
+        invoiceFileName: e.invoiceFileName,
+      })),
     };
   } catch {
     return getMockSaleDetail(id);
   }
+}
+
+/**
+ * Creates a new customer/company on the fly
+ */
+export async function createCustomer(data: {
+  name: string;
+  companyName?: string;
+  phone: string;
+  email?: string;
+  deliveryAddress?: string;
+  customerType?: string;
+  creditLimit?: number;
+  paymentTermsDays?: number;
+}) {
+  const count = await prisma.customer.count();
+  const code = `CUST-${String(count + 1).padStart(3, "0")}-${Date.now().toString().slice(-4)}`;
+
+  const customer = await prisma.customer.create({
+    data: {
+      code,
+      name: data.name.trim(),
+      companyName: data.companyName?.trim() || null,
+      phone: data.phone.trim(),
+      email: data.email?.trim() || null,
+      deliveryAddress: data.deliveryAddress?.trim() || null,
+      customerType: data.customerType || "Wholesale",
+      creditLimit: data.creditLimit ? Number(data.creditLimit) : 50000,
+      paymentTermsDays: data.paymentTermsDays ? Number(data.paymentTermsDays) : 15,
+      outstandingBalance: 0,
+      isActive: true,
+    },
+  });
+
+  return {
+    id: customer.id,
+    code: customer.code,
+    name: customer.name,
+    companyName: customer.companyName,
+    customerType: customer.customerType,
+    email: customer.email,
+    phone: customer.phone,
+    deliveryAddress: customer.deliveryAddress,
+    creditLimit: customer.creditLimit,
+    outstandingBalance: customer.outstandingBalance,
+    paymentTermsDays: customer.paymentTermsDays,
+    isActive: customer.isActive,
+  };
 }
 
 /**

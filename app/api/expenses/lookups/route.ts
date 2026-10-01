@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { getExpenseCategories } from "@/services/expenses";
+import { getExpenseLookups } from "@/services/expenses";
 
 export async function GET() {
   try {
-    const categories = await getExpenseCategories();
-    return NextResponse.json({ data: { categories } });
+    const lookups = await getExpenseLookups();
+    return NextResponse.json({ data: lookups });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Failed to fetch categories";
+    const message = error instanceof Error ? error.message : "Failed to fetch expense lookups";
     console.error("[Expense Lookups GET Error]:", message);
     return NextResponse.json({ error: message }, { status: 500 });
   }

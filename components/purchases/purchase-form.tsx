@@ -7,6 +7,11 @@ import {
   Trash2,
   ArrowLeft,
   Save,
+  Anchor,
+  Phone,
+  Mail,
+  MapPin,
+  Building,
   Loader2,
   Upload,
   X,
@@ -16,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { formatCurrency, formatWeight } from "@/lib/utils";
 import type {
   SupplierDTO,
@@ -48,8 +54,23 @@ const PAYMENT_METHODS = [
 
 export function PurchaseForm({ suppliers, fishTypes }: PurchaseFormProps) {
   const router = useRouter();
+  const [supplierList, setSupplierList] = React.useState<SupplierDTO[]>(suppliers);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+
+  // Quick Add Supplier Dialog State
+  const [showAddSupplier, setShowAddSupplier] = React.useState(false);
+  const [isCreatingSupplier, setIsCreatingSupplier] = React.useState(false);
+  const [newSupplierData, setNewSupplierData] = React.useState({
+    name: "",
+    phone: "",
+    boatName: "",
+    harborLocation: "Cochin Fisheries Harbour",
+    contactPerson: "",
+    email: "",
+    taxNumber: "",
+    address: "",
+  });
 
   // Form state
   const [supplierId, setSupplierId] = React.useState("");
@@ -101,7 +122,51 @@ export function PurchaseForm({ suppliers, fishTypes }: PurchaseFormProps) {
       : "UNPAID";
 
   // Selected supplier info
-  const selectedSupplier = suppliers.find((s) => s.id === supplierId);
+  const selectedSupplier = supplierList.find((s) => s.id === supplierId);
+
+  async function handleCreateNewSupplier(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newSupplierData.name || !newSupplierData.phone) {
+      alert("Please provide at least a supplier/boat name and phone number.");
+      return;
+    }
+
+    setIsCreatingSupplier(true);
+    try {
+      const res = await fetch("/api/purchases/lookups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newSupplierData),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to create supplier");
+      }
+
+      const { data: created } = await res.json();
+      setSupplierList((prev) => [created, ...prev]);
+      setSupplierId(created.id);
+      if (created.harborLocation && !landingHarbor) {
+        setLandingHarbor(created.harborLocation);
+      }
+      setShowAddSupplier(false);
+      setNewSupplierData({
+        name: "",
+        phone: "",
+        boatName: "",
+        harborLocation: "Cochin Fisheries Harbour",
+        contactPerson: "",
+        email: "",
+        taxNumber: "",
+        address: "",
+      });
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to create new supplier");
+    } finally {
+      setIsCreatingSupplier(false);
+    }
+  }
 
   // Item handlers
   function addItem() {
@@ -276,16 +341,25 @@ export function PurchaseForm({ suppliers, fishTypes }: PurchaseFormProps) {
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-muted-foreground">
-                    Supplier / Boat *
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-medium text-muted-foreground">
+                      Supplier / Boat *
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddSupplier(true)}
+                      className="text-xs text-primary hover:underline font-semibold flex items-center gap-1"
+                    >
+                      <Plus className="h-3 w-3" /> Add New Supplier / Boat
+                    </button>
+                  </div>
                   <Select
                     value={supplierId}
                     onChange={(e) => setSupplierId(e.target.value)}
                     className="h-9 text-sm"
                   >
                     <option value="">Select Supplier...</option>
-                    {suppliers.map((s) => (
+                    {supplierList.map((s) => (
                       <option key={s.id} value={s.id}>
                         {s.name}
                         {s.boatName ? ` (${s.boatName})` : ""}
@@ -796,6 +870,150 @@ export function PurchaseForm({ suppliers, fishTypes }: PurchaseFormProps) {
           </Card>
         </div>
       </div>
+
+      {/* Quick Add Supplier / Boat Dialog */}
+      <Dialog open={showAddSupplier} onOpenChange={setShowAddSupplier}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <Anchor className="h-4.5 w-4.5 text-primary" />
+            Add New Supplier / Boat Company
+          </DialogTitle>
+          <DialogDescription className="text-xs">
+            Register a new dockside trawler or seafood supplier instantly.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={handleCreateNewSupplier} className="space-y-3.5 py-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-foreground">
+                Supplier / Trader Name *
+              </label>
+              <Input
+                placeholder="e.g. Antony Fernandez Fisheries"
+                value={newSupplierData.name}
+                onChange={(e) =>
+                  setNewSupplierData({ ...newSupplierData, name: e.target.value })
+                }
+                required
+                className="h-8.5 text-xs"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">
+                Boat / Trawler Name & ID
+              </label>
+              <Input
+                placeholder="e.g. St. Jude Trawler #7"
+                value={newSupplierData.boatName}
+                onChange={(e) =>
+                  setNewSupplierData({ ...newSupplierData, boatName: e.target.value })
+                }
+                className="h-8.5 text-xs"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-foreground flex items-center gap-1">
+                <Phone className="h-3 w-3 text-muted-foreground" /> Phone Number *
+              </label>
+              <Input
+                placeholder="+91 98471 22334"
+                value={newSupplierData.phone}
+                onChange={(e) =>
+                  setNewSupplierData({ ...newSupplierData, phone: e.target.value })
+                }
+                required
+                className="h-8.5 text-xs"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">
+                Harbor / Landing Dock
+              </label>
+              <Input
+                placeholder="e.g. Cochin Fisheries Harbour"
+                value={newSupplierData.harborLocation}
+                onChange={(e) =>
+                  setNewSupplierData({ ...newSupplierData, harborLocation: e.target.value })
+                }
+                className="h-8.5 text-xs"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">
+                Contact Person
+              </label>
+              <Input
+                placeholder="e.g. Captain Antony"
+                value={newSupplierData.contactPerson}
+                onChange={(e) =>
+                  setNewSupplierData({ ...newSupplierData, contactPerson: e.target.value })
+                }
+                className="h-8.5 text-xs"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                <Mail className="h-3 w-3 text-muted-foreground" /> Email (Optional)
+              </label>
+              <Input
+                type="email"
+                placeholder="antony@seafood.in"
+                value={newSupplierData.email}
+                onChange={(e) =>
+                  setNewSupplierData({ ...newSupplierData, email: e.target.value })
+                }
+                className="h-8.5 text-xs"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+              <MapPin className="h-3 w-3 text-muted-foreground" /> Base Address / Dock Office
+            </label>
+            <Input
+              placeholder="e.g. Harbor Road, Thoppumpady, Kochi"
+              value={newSupplierData.address}
+              onChange={(e) =>
+                setNewSupplierData({ ...newSupplierData, address: e.target.value })
+              }
+              className="h-8.5 text-xs"
+            />
+          </div>
+
+          <DialogFooter className="pt-3">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setShowAddSupplier(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              size="sm"
+              disabled={isCreatingSupplier}
+              className="gap-1.5"
+            >
+              {isCreatingSupplier ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving...
+                </>
+              ) : (
+                "Save & Select Supplier"
+              )}
+            </Button>
+          </DialogFooter>
+        </form>
+      </Dialog>
     </form>
   );
 }

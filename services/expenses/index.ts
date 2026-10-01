@@ -115,6 +115,9 @@ export async function getExpensesList(
       orderBy: { expenseDate: "desc" },
       include: {
         category: true,
+        sale: {
+          include: { customer: true },
+        },
       },
     });
 
@@ -130,6 +133,9 @@ export async function getExpensesList(
       paidTo: e.paidTo,
       paymentMethod: e.paymentMethod,
       expenseDate: e.expenseDate.toISOString(),
+      saleId: e.saleId,
+      saleNumber: e.sale?.saleNumber || null,
+      customerName: e.sale?.customer?.name || null,
       receiptUrl: e.receiptUrl,
       invoiceUrl: e.invoiceUrl,
       invoiceFileName: e.invoiceFileName,
@@ -189,6 +195,44 @@ export async function countExpenses(
   }
 }
 
+/**
+ * Fetch lookup data for expenses (categories + sales for linking)
+ */
+export async function getExpenseLookups() {
+  try {
+    const [categories, sales] = await Promise.all([
+      getExpenseCategories(),
+      prisma.sale.findMany({
+        orderBy: { saleDate: "desc" },
+        take: 50,
+        select: {
+          id: true,
+          saleNumber: true,
+          saleDate: true,
+          totalAmount: true,
+          customer: { select: { name: true } },
+        },
+      }),
+    ]);
+
+    return {
+      categories,
+      sales: sales.map((s) => ({
+        id: s.id,
+        saleNumber: s.saleNumber,
+        customerName: s.customer.name,
+        saleDate: s.saleDate.toISOString(),
+        totalAmount: s.totalAmount,
+      })),
+    };
+  } catch (error) {
+    console.error("Failed to fetch expense lookups:", error);
+    return {
+      categories: await getExpenseCategories(),
+      sales: [],
+    };
+  }
+}
 
 /**
  * Fetch a single expense by ID
@@ -199,6 +243,9 @@ export async function getExpenseById(id: string): Promise<ExpenseDTO | null> {
       where: { id },
       include: {
         category: true,
+        sale: {
+          include: { customer: true },
+        },
       },
     });
 
@@ -216,6 +263,9 @@ export async function getExpenseById(id: string): Promise<ExpenseDTO | null> {
       paidTo: expense.paidTo,
       paymentMethod: expense.paymentMethod,
       expenseDate: expense.expenseDate.toISOString(),
+      saleId: expense.saleId,
+      saleNumber: expense.sale?.saleNumber || null,
+      customerName: expense.sale?.customer?.name || null,
       receiptUrl: expense.receiptUrl,
       invoiceUrl: expense.invoiceUrl,
       invoiceFileName: expense.invoiceFileName,
@@ -246,6 +296,7 @@ export async function createExpense(data: ExpenseFormValues, userId?: string): P
       paidTo: validated.paidTo?.trim() || null,
       paymentMethod: validated.paymentMethod as PaymentMethod,
       expenseDate,
+      saleId: validated.saleId && validated.saleId !== "" ? validated.saleId : null,
       invoiceUrl: validated.invoiceUrl || null,
       invoiceFileName: validated.invoiceFileName || null,
       receiptUrl: validated.invoiceUrl || null,
@@ -253,6 +304,9 @@ export async function createExpense(data: ExpenseFormValues, userId?: string): P
     },
     include: {
       category: true,
+      sale: {
+        include: { customer: true },
+      },
     },
   });
 
@@ -265,6 +319,7 @@ export async function createExpense(data: ExpenseFormValues, userId?: string): P
       expenseNumber: created.expenseNumber,
       amount: created.amount,
       category: created.category.name,
+      saleId: created.saleId,
     },
   });
 
@@ -280,6 +335,9 @@ export async function createExpense(data: ExpenseFormValues, userId?: string): P
     paidTo: created.paidTo,
     paymentMethod: created.paymentMethod,
     expenseDate: created.expenseDate.toISOString(),
+    saleId: created.saleId,
+    saleNumber: created.sale?.saleNumber || null,
+    customerName: created.sale?.customer?.name || null,
     receiptUrl: created.receiptUrl,
     invoiceUrl: created.invoiceUrl,
     invoiceFileName: created.invoiceFileName,

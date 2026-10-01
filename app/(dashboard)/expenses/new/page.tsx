@@ -1,6 +1,6 @@
 import * as React from "react";
 import { ExpenseForm } from "@/components/expenses/expense-form";
-import { getExpenseCategories } from "@/services/expenses";
+import { getExpenseLookups } from "@/services/expenses";
 
 export const metadata = {
   title: "Add Expense | HPS SEA FOODS",
@@ -10,18 +10,18 @@ export const metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function NewExpensePage() {
-  const categories = await getExpenseCategories();
+  const { categories, sales } = await getExpenseLookups();
 
   return (
     <div className="space-y-6">
       <div className="border-b border-zinc-800/80 pb-4">
         <h1 className="text-xl font-bold tracking-tight text-white">Add Expense</h1>
         <p className="text-xs text-zinc-400 mt-0.5">
-          Record your spending on ice, packing, transport, labour, or other costs.
+          Record your spending on ice, packing, transport, labour, or link directly to a sale dispatch.
         </p>
       </div>
 
-      <ExpenseForm categories={categories} />
+      <ExpenseForm categories={categories} sales={sales} />
     </div>
   );
 }

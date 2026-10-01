@@ -12,12 +12,18 @@ import {
   X,
   AlertTriangle,
   CheckCircle2,
+  Building,
+  User,
+  Phone,
+  Mail,
+  MapPin,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { formatCurrency, formatWeight } from "@/lib/utils";
 import { DELIVERY_STATUSES } from "@/constants";
 import type {
@@ -50,8 +56,23 @@ const PAYMENT_METHODS = [
 
 export function SalesForm({ customers, fishTypes }: SalesFormProps) {
   const router = useRouter();
+  const [customerList, setCustomerList] = React.useState<CustomerDTO[]>(customers);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+
+  // Quick Add Customer Dialog state
+  const [showAddCustomer, setShowAddCustomer] = React.useState(false);
+  const [isCreatingCustomer, setIsCreatingCustomer] = React.useState(false);
+  const [newCustomerData, setNewCustomerData] = React.useState({
+    name: "",
+    companyName: "",
+    phone: "",
+    email: "",
+    deliveryAddress: "",
+    customerType: "Wholesale",
+    creditLimit: 50000,
+    paymentTermsDays: 15,
+  });
 
   // Form state
   const [customerId, setCustomerId] = React.useState("");
@@ -106,8 +127,49 @@ export function SalesForm({ customers, fishTypes }: SalesFormProps) {
       ? "PARTIAL"
       : "UNPAID";
 
-  const selectedCustomer = customers.find((c) => c.id === customerId);
+  const selectedCustomer = customerList.find((c) => c.id === customerId);
   const hasOverStockItems = calculatedItems.some((i) => i.isOverStock);
+
+  async function handleCreateNewCustomer(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newCustomerData.name || !newCustomerData.phone) {
+      alert("Please provide at least a customer/company name and phone number.");
+      return;
+    }
+
+    setIsCreatingCustomer(true);
+    try {
+      const res = await fetch("/api/sales/lookups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newCustomerData),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to create company");
+      }
+
+      const { data: created } = await res.json();
+      setCustomerList((prev) => [created, ...prev]);
+      setCustomerId(created.id);
+      setShowAddCustomer(false);
+      setNewCustomerData({
+        name: "",
+        companyName: "",
+        phone: "",
+        email: "",
+        deliveryAddress: "",
+        customerType: "Wholesale",
+        creditLimit: 50000,
+        paymentTermsDays: 15,
+      });
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to create new customer");
+    } finally {
+      setIsCreatingCustomer(false);
+    }
+  }
 
   // Item handlers
   function addItem() {
@@ -286,16 +348,25 @@ export function SalesForm({ customers, fishTypes }: SalesFormProps) {
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-muted-foreground">
-                    Customer / Buyer Company *
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-medium text-muted-foreground">
+                      Customer / Buyer Company *
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddCustomer(true)}
+                      className="text-xs text-primary hover:underline font-semibold flex items-center gap-1"
+                    >
+                      <Plus className="h-3 w-3" /> Add New Company
+                    </button>
+                  </div>
                   <Select
                     value={customerId}
                     onChange={(e) => setCustomerId(e.target.value)}
                     className="h-9 text-sm"
                   >
                     <option value="">Select Customer...</option>
-                    {customers.map((c) => (
+                    {customerList.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name} {c.companyName ? `(${c.companyName})` : ""}
                       </option>
@@ -770,6 +841,155 @@ export function SalesForm({ customers, fishTypes }: SalesFormProps) {
           </Card>
         </div>
       </div>
+
+      {/* Quick Add Customer / Company Dialog */}
+      <Dialog open={showAddCustomer} onOpenChange={setShowAddCustomer}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <Building className="h-4.5 w-4.5 text-primary" />
+            Add New Buyer / Company
+          </DialogTitle>
+          <DialogDescription className="text-xs">
+            Create a new client record instantly. It will automatically be selected for this order.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={handleCreateNewCustomer} className="space-y-3.5 py-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-foreground">
+                Customer / Buyer Name *
+              </label>
+              <Input
+                placeholder="e.g. Apex Ocean Foods"
+                value={newCustomerData.name}
+                onChange={(e) =>
+                  setNewCustomerData({ ...newCustomerData, name: e.target.value })
+                }
+                required
+                className="h-8.5 text-xs"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">
+                Company / Legal Trade Name
+              </label>
+              <Input
+                placeholder="e.g. Apex Marine Exports Pvt Ltd"
+                value={newCustomerData.companyName}
+                onChange={(e) =>
+                  setNewCustomerData({ ...newCustomerData, companyName: e.target.value })
+                }
+                className="h-8.5 text-xs"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-foreground flex items-center gap-1">
+                <Phone className="h-3 w-3 text-muted-foreground" /> Phone Number *
+              </label>
+              <Input
+                placeholder="+91 98470 55443"
+                value={newCustomerData.phone}
+                onChange={(e) =>
+                  setNewCustomerData({ ...newCustomerData, phone: e.target.value })
+                }
+                required
+                className="h-8.5 text-xs"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                <Mail className="h-3 w-3 text-muted-foreground" /> Email Address
+              </label>
+              <Input
+                type="email"
+                placeholder="orders@apexocean.com"
+                value={newCustomerData.email}
+                onChange={(e) =>
+                  setNewCustomerData({ ...newCustomerData, email: e.target.value })
+                }
+                className="h-8.5 text-xs"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+              <MapPin className="h-3 w-3 text-muted-foreground" /> Delivery / Warehouse Address
+            </label>
+            <Input
+              placeholder="e.g. Export Wharf Shed #4, Willingdon Island, Cochin"
+              value={newCustomerData.deliveryAddress}
+              onChange={(e) =>
+                setNewCustomerData({ ...newCustomerData, deliveryAddress: e.target.value })
+              }
+              className="h-8.5 text-xs"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">
+                Customer Type
+              </label>
+              <Select
+                value={newCustomerData.customerType}
+                onChange={(e) =>
+                  setNewCustomerData({ ...newCustomerData, customerType: e.target.value })
+                }
+                className="h-8.5 text-xs"
+              >
+                <option value="Wholesale">Wholesale Merchant</option>
+                <option value="Export">Export House</option>
+                <option value="Hotel/Restaurant">Hotel & Restaurant</option>
+                <option value="Retail">Retail Chain</option>
+                <option value="Distributor">Regional Distributor</option>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">
+                Credit Limit (₹)
+              </label>
+              <Input
+                type="number"
+                value={newCustomerData.creditLimit}
+                onChange={(e) =>
+                  setNewCustomerData({ ...newCustomerData, creditLimit: Number(e.target.value) })
+                }
+                className="h-8.5 text-xs font-mono"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="pt-3">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setShowAddCustomer(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              size="sm"
+              disabled={isCreatingCustomer}
+              className="gap-1.5"
+            >
+              {isCreatingCustomer ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving...
+                </>
+              ) : (
+                "Save & Select Company"
+              )}
+            </Button>
+          </DialogFooter>
+        </form>
+      </Dialog>
     </form>
   );
 }

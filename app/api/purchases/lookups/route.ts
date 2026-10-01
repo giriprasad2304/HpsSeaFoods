@@ -11,3 +11,16 @@ export async function GET() {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const { createSupplier } = await import("@/services/purchases");
+    const newSupplier = await createSupplier(body);
+    return NextResponse.json({ data: newSupplier }, { status: 201 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to create supplier";
+    console.error("[Supplier Create Error]:", message);
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
+}
