@@ -12,9 +12,6 @@
     "prisma:generate": "prisma generate",
     "db:seed": "tsx prisma/seed.ts"
   },
-  "prisma": {
-    "seed": "tsx prisma/seed.ts"
-  },
   "dependencies": {
     "@prisma/client": "^6.4.1",
     "@react-pdf/renderer": "^4.2.2",
