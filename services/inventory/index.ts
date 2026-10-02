@@ -162,3 +162,53 @@ export async function createStockAdjustment(data: {
 
   return transaction;
 }
+
+/**
+ * Creates a new fish species/type in the master catalogue.
+ */
+export async function createFishType(data: {
+  name: string;
+  code?: string;
+  category?: string;
+  grade?: string;
+  scientificName?: string;
+  description?: string;
+}) {
+  const cleanedName = data.name.trim();
+  const baseCode = (data.code?.trim() || `FISH-${cleanedName.replace(/[^a-zA-Z0-9]/g, "").slice(0, 3).toUpperCase()}`).toUpperCase();
+  
+  // Ensure unique code
+  let finalCode = baseCode;
+  const existingWithCode = await prisma.fishType.findUnique({ where: { code: finalCode } });
+  if (existingWithCode) {
+    finalCode = `${baseCode}-${Date.now().toString().slice(-4)}`;
+  }
+
+  const created = await prisma.fishType.create({
+    data: {
+      code: finalCode,
+      name: cleanedName,
+      category: data.category?.trim() || "Pelagic",
+      grade: data.grade?.trim() || "Grade A",
+      scientificName: data.scientificName?.trim() || null,
+      description: data.description?.trim() || null,
+      isActive: true,
+    },
+  });
+
+  return {
+    id: created.id,
+    fishTypeId: created.id,
+    code: created.code,
+    name: created.name,
+    category: created.category,
+    grade: created.grade || "Grade A",
+    currentStockKg: 0,
+    totalPurchasedKg: 0,
+    totalSoldKg: 0,
+    totalWastageKg: 0,
+    averageCostPerKg: 0,
+    stockStatus: "OUT_OF_STOCK" as const,
+  };
+}
+
