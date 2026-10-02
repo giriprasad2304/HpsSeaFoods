@@ -33,28 +33,8 @@ export async function getPaymentsList(limit = 20): Promise<PaymentRecordDTO[]> {
       referenceNumber: p.referenceNumber,
       partyName: p.customer?.name ?? p.supplier?.name ?? "General Payment",
     }));
-  } catch {
-    return [
-      {
-        id: "pay-1",
-        paymentNumber: "RCT-2026-0099",
-        paymentType: "CUSTOMER_RECEIPT",
-        amount: 29800.0,
-        paymentMethod: "BANK_TRANSFER",
-        paymentDate: new Date().toISOString(),
-        referenceNumber: "TXN-FED-994821",
-        partyName: "Marina Bay Seafood Distributors",
-      },
-      {
-        id: "pay-2",
-        paymentNumber: "VCH-2026-0154",
-        paymentType: "SUPPLIER_PAYMENT",
-        amount: 31500.0,
-        paymentMethod: "BANK_TRANSFER",
-        paymentDate: new Date(Date.now() - 86400000).toISOString(),
-        referenceNumber: "TXN-SBI-103847",
-        partyName: "St. Peter Deep Sea Trawlers",
-      },
-    ];
+  } catch (error) {
+    console.error("Failed to fetch payments list:", error);
+    return [];
   }
 }

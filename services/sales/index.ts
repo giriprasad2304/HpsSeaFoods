@@ -187,32 +187,9 @@ export async function listSales(
       totalWeightKg: sale.items.reduce((sum, item) => sum + item.weightKg, 0),
       itemsCount: sale.items.length,
     }));
-  } catch {
-    // Dynamic fallback for offline/mock preview
-    const fallbackList = getMockSalesList();
-    return fallbackList.filter((s) => {
-      if (filters.customerId && filters.customerId !== "ALL" && s.customerId !== filters.customerId)
-        return false;
-      if (filters.paymentStatus && filters.paymentStatus !== "ALL" && s.paymentStatus !== filters.paymentStatus)
-        return false;
-      if (filters.deliveryStatus && filters.deliveryStatus !== "ALL" && s.status !== filters.deliveryStatus)
-        return false;
-      if (filters.date && !s.saleDate.startsWith(filters.date))
-        return false;
-      if (filters.month && filters.month !== "ALL" && new Date(s.saleDate).getMonth() + 1 !== parseInt(filters.month, 10))
-        return false;
-      if (filters.year && filters.year !== "ALL" && new Date(s.saleDate).getFullYear() !== parseInt(filters.year, 10))
-        return false;
-      if (filters.invoiceNumber && !s.saleNumber.toLowerCase().includes(filters.invoiceNumber.toLowerCase()))
-        return false;
-      if (
-        filters.search &&
-        !s.saleNumber.toLowerCase().includes(filters.search.toLowerCase()) &&
-        !s.customerName.toLowerCase().includes(filters.search.toLowerCase())
-      )
-        return false;
-      return true;
-    });
+  } catch (error) {
+    console.error("Failed to fetch sales list:", error);
+    return [];
   }
 }
 
@@ -318,7 +295,7 @@ export async function getSaleById(id: string): Promise<SaleDetailDTO | null> {
     });
 
     if (!sale) {
-      return getMockSaleDetail(id);
+      return null;
     }
 
     return {
@@ -379,8 +356,9 @@ export async function getSaleById(id: string): Promise<SaleDetailDTO | null> {
         invoiceFileName: e.invoiceFileName,
       })),
     };
-  } catch {
-    return getMockSaleDetail(id);
+  } catch (error) {
+    console.error(`Failed to fetch sale detail for ${id}:`, error);
+    return null;
   }
 }
 
@@ -847,204 +825,15 @@ export async function getCustomersAndFishTypes(): Promise<SalesLookupsDTO> {
         };
       }),
     };
-  } catch {
+  } catch (error) {
+    console.error("Failed to fetch sales lookups:", error);
     return {
-      customers: [
-        {
-          id: "cust-1",
-          code: "CUST-001",
-          name: "Pacific Ocean Harvesters Ltd",
-          companyName: "Pacific Ocean Harvesters Ltd",
-          customerType: "Wholesale Export",
-          phone: "+971 4 391 2000",
-          email: "procurement@pacificharvest.ae",
-          deliveryAddress: "Dubai Cargo Village, Gate 4",
-          outstandingBalance: 8450.0,
-          creditLimit: 100000.0,
-          isActive: true,
-        },
-        {
-          id: "cust-2",
-          code: "CUST-002",
-          name: "Marina Bay Seafood Distributors",
-          companyName: "Marina Bay Seafood Distributors",
-          customerType: "Regional Wholesale",
-          phone: "+91 94471 88990",
-          email: "orders@marinabay.in",
-          deliveryAddress: "Plot 14, Willingdon Island, Cochin",
-          outstandingBalance: 0.0,
-          creditLimit: 50000.0,
-          isActive: true,
-        },
-        {
-          id: "cust-3",
-          code: "CUST-003",
-          name: "Golden Coral Export Corp",
-          companyName: "Golden Coral Export Corp",
-          customerType: "Overseas Client",
-          phone: "+65 6789 0123",
-          email: "trade@goldencoral.sg",
-          deliveryAddress: "Jurong Port Logistics Complex",
-          outstandingBalance: 12500.0,
-          creditLimit: 150000.0,
-          isActive: true,
-        },
-      ],
-      fishTypes: [
-        {
-          id: "ft-1",
-          code: "YFT-001",
-          name: "Yellowfin Tuna (Thunnus albacares)",
-          category: "Pelagic Export",
-          grade: "Grade AAA Export",
-          availableStockKg: 3450.0,
-          isActive: true,
-        },
-        {
-          id: "ft-2",
-          code: "KGF-002",
-          name: "Kingfish / Seer (Scomberomorus commerson)",
-          category: "Coastal Prime",
-          grade: "Grade A",
-          availableStockKg: 820.0,
-          isActive: true,
-        },
-        {
-          id: "ft-3",
-          code: "PMF-003",
-          name: "Silver Pomfret (Pampus argenteus)",
-          category: "Demersal White",
-          grade: "Grade A Export",
-          availableStockKg: 2400.0,
-          isActive: true,
-        },
-        {
-          id: "ft-4",
-          code: "RSP-004",
-          name: "Red Snapper (Lutjanus campechanus)",
-          category: "Reef Fish",
-          grade: "Grade A",
-          availableStockKg: 1100.0,
-          isActive: true,
-        },
-      ],
+      customers: [],
+      fishTypes: [],
     };
   }
 }
 
-// Mock Sales list helper
-function getMockSalesList(): SaleDTO[] {
-  return [
-    {
-      id: "sale-1",
-      saleNumber: "INV-2026-0089",
-      customerId: "cust-1",
-      customerName: "Pacific Ocean Harvesters Ltd",
-      saleDate: new Date().toISOString(),
-      deliveryDate: new Date(Date.now() + 86400000).toISOString(),
-      status: "CONFIRMED",
-      paymentStatus: "PARTIAL",
-      subtotal: 18450.0,
-      taxAmount: 0.0,
-      discountAmount: 0.0,
-      totalAmount: 18450.0,
-      paidAmount: 10000.0,
-      balanceAmount: 8450.0,
-      totalWeightKg: 1250.0,
-      itemsCount: 2,
-    },
-    {
-      id: "sale-2",
-      saleNumber: "INV-2026-0088",
-      customerId: "cust-2",
-      customerName: "Marina Bay Seafood Distributors",
-      saleDate: new Date(Date.now() - 86400000).toISOString(),
-      deliveryDate: new Date().toISOString(),
-      status: "SHIPPED",
-      paymentStatus: "PAID",
-      subtotal: 29800.0,
-      taxAmount: 0.0,
-      discountAmount: 0.0,
-      totalAmount: 29800.0,
-      paidAmount: 29800.0,
-      balanceAmount: 0.0,
-      totalWeightKg: 2100.0,
-      itemsCount: 2,
-    },
-    {
-      id: "sale-3",
-      saleNumber: "INV-2026-0087",
-      customerId: "cust-3",
-      customerName: "Golden Coral Export Corp",
-      saleDate: new Date(Date.now() - 172800000).toISOString(),
-      deliveryDate: new Date(Date.now() - 86400000).toISOString(),
-      status: "DELIVERED",
-      paymentStatus: "PAID",
-      subtotal: 42150.0,
-      taxAmount: 0.0,
-      discountAmount: 0.0,
-      totalAmount: 42150.0,
-      paidAmount: 42150.0,
-      balanceAmount: 0.0,
-      totalWeightKg: 3400.0,
-      itemsCount: 3,
-    },
-  ];
-}
-
-function getMockSaleDetail(id: string): SaleDetailDTO | null {
-  const mock = getMockSalesList().find((s) => s.id === id);
-  if (!mock) return null;
-
-  return {
-    ...mock,
-    customerCompany: "Pacific Ocean Harvesters Ltd",
-    customerPhone: "+971 4 391 2000",
-    customerEmail: "procurement@pacificharvest.ae",
-    customerAddress: "Dubai Cargo Village, Gate 4",
-    createdAt: mock.saleDate,
-    updatedAt: mock.saleDate,
-    items: [
-      {
-        id: "sitem-1",
-        saleId: mock.id,
-        fishTypeId: "ft-1",
-        fishTypeName: "Yellowfin Tuna (Thunnus albacares)",
-        fishTypeCode: "YFT-001",
-        grade: "Grade AAA Export",
-        weightKg: 850,
-        unitPricePerKg: 14.5,
-        totalPrice: 12325,
-        notes: "Chilled export cut",
-        createdAt: mock.saleDate,
-      },
-      {
-        id: "sitem-2",
-        saleId: mock.id,
-        fishTypeId: "ft-2",
-        fishTypeName: "Kingfish / Seer (Scomberomorus commerson)",
-        fishTypeCode: "KGF-002",
-        grade: "Grade A",
-        weightKg: 400,
-        unitPricePerKg: 15.3125,
-        totalPrice: 6125,
-        notes: "Cleaned and iced",
-        createdAt: mock.saleDate,
-      },
-    ],
-    payments: [
-      {
-        id: "pay-1",
-        paymentNumber: "RCP-2026-0045",
-        amount: mock.paidAmount,
-        paymentMethod: "BANK_TRANSFER",
-        paymentDate: mock.saleDate,
-        referenceNumber: "SWIFT-DXB-88392",
-        notes: "Export order advance payment",
-      },
-    ],
-  };
-}
-
 // Backward compatibility alias
 export const getSalesList = listSales;
+

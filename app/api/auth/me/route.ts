@@ -20,8 +20,8 @@ export async function GET() {
       authenticated: true,
       user: {
         id: "admin-001",
-        email: "admin@hpsseafoods.com",
-        name: "Admin Operations Lead",
+        email: "hpsfooods@gmail.com",
+        name: "HPS Admin",
         role: "ADMIN",
       },
     });

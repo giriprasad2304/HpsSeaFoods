@@ -64,49 +64,9 @@ export async function getInventoryStockSummary(): Promise<InventoryStockSummaryD
         stockStatus,
       };
     });
-  } catch {
-    // Dynamic fallback demo data illustrating transaction-based calculation
-    return [
-      {
-        fishTypeId: "ft-1",
-        code: "YFT-001",
-        name: "Yellowfin Tuna (Thunnus albacares)",
-        category: "Pelagic Export",
-        grade: "Grade AAA Export",
-        currentStockKg: 3450.0, // Calculated: (+5000 inward - 1400 sold - 150 wastage)
-        totalPurchasedKg: 5000.0,
-        totalSoldKg: 1400.0,
-        totalWastageKg: 150.0,
-        averageCostPerKg: 7.2,
-        stockStatus: "IN_STOCK",
-      },
-      {
-        fishTypeId: "ft-2",
-        code: "KGF-002",
-        name: "Kingfish / Seer (Scomberomorus commerson)",
-        category: "Coastal Prime",
-        grade: "Grade A",
-        currentStockKg: 320.0, // Calculated: (+1500 inward - 1100 sold - 80 adjustment)
-        totalPurchasedKg: 1500.0,
-        totalSoldKg: 1100.0,
-        totalWastageKg: 80.0,
-        averageCostPerKg: 9.5,
-        stockStatus: "LOW_STOCK",
-      },
-      {
-        fishTypeId: "ft-3",
-        code: "PMF-003",
-        name: "Silver Pomfret (Pampus argenteus)",
-        category: "Demersal White",
-        grade: "Grade A Export",
-        currentStockKg: 2400.0, // Calculated: (+3000 inward - 600 sold)
-        totalPurchasedKg: 3000.0,
-        totalSoldKg: 600.0,
-        totalWastageKg: 0.0,
-        averageCostPerKg: 11.0,
-        stockStatus: "IN_STOCK",
-      },
-    ];
+  } catch (error) {
+    console.error("Failed to fetch inventory status:", error);
+    return [];
   }
 }
 
@@ -135,45 +95,9 @@ export async function getInventoryTransactionsList(limit = 25): Promise<Inventor
       notes: tx.notes,
       createdAt: tx.createdAt.toISOString(),
     }));
-  } catch {
-    return [
-      {
-        id: "tx-1",
-        fishTypeId: "ft-1",
-        fishTypeName: "Yellowfin Tuna",
-        transactionType: "PURCHASE_INWARD",
-        quantityKg: 2500.0,
-        unitCost: 7.2,
-        batchLotNumber: "LOT-YFT-2026-089",
-        storageLocation: "Blast Freezer Room 1 (-35°C)",
-        notes: "Landed from St. Peter Trawler",
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: "tx-2",
-        fishTypeId: "ft-1",
-        fishTypeName: "Yellowfin Tuna",
-        transactionType: "SALE_OUTWARD",
-        quantityKg: -1000.0,
-        unitCost: null,
-        batchLotNumber: "LOT-YFT-2026-089",
-        storageLocation: "Deep Freeze Hold A",
-        notes: "Air Freight Dubai Export INV-2026-0089",
-        createdAt: new Date(Date.now() - 3600000).toISOString(),
-      },
-      {
-        id: "tx-3",
-        fishTypeId: "ft-2",
-        fishTypeName: "Kingfish / Seer",
-        transactionType: "ADJUSTMENT_OUTWARD",
-        quantityKg: -30.0,
-        unitCost: null,
-        batchLotNumber: "LOT-KGF-2026-042",
-        storageLocation: "Deep Freeze Hold B",
-        notes: "Defrost trimming & moisture adjustment",
-        createdAt: new Date(Date.now() - 7200000).toISOString(),
-      },
-    ];
+  } catch (error) {
+    console.error("Failed to fetch inventory transactions:", error);
+    return [];
   }
 }
 

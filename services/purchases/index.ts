@@ -171,19 +171,9 @@ export async function listPurchases(
       invoiceUrl: p.invoiceUrl,
       itemsCount: p.items.length,
     }));
-  } catch {
-    // Dynamic fallback for dev preview
-    const fallbackList = getMockPurchasesList();
-    return fallbackList.filter((b) => {
-      if (filters.supplierId && filters.supplierId !== "ALL" && b.supplierId !== filters.supplierId) return false;
-      if (filters.paymentStatus && filters.paymentStatus !== "ALL" && b.paymentStatus !== filters.paymentStatus) return false;
-      if (filters.date && !b.purchaseDate.startsWith(filters.date)) return false;
-      if (filters.month && filters.month !== "ALL" && new Date(b.purchaseDate).getMonth() + 1 !== parseInt(filters.month, 10)) return false;
-      if (filters.year && filters.year !== "ALL" && new Date(b.purchaseDate).getFullYear() !== parseInt(filters.year, 10)) return false;
-      if (filters.invoiceNumber && !b.purchaseNumber.toLowerCase().includes(filters.invoiceNumber.toLowerCase())) return false;
-      if (filters.search && !b.purchaseNumber.toLowerCase().includes(filters.search.toLowerCase()) && !b.supplierName.toLowerCase().includes(filters.search.toLowerCase())) return false;
-      return true;
-    });
+  } catch (error) {
+    console.error("Failed to fetch purchases list:", error);
+    return [];
   }
 }
 
@@ -279,57 +269,6 @@ export async function getPurchaseById(id: string): Promise<PurchaseDetailDTO | n
     });
 
     if (!purchase) {
-      const mock = getMockPurchasesList().find((p) => p.id === id);
-      if (mock) {
-        return {
-          ...mock,
-          supplierPhone: "+91 98470 11223",
-          supplierBoatName: "St. Peter Trawler #4",
-          createdAt: mock.purchaseDate,
-          updatedAt: mock.purchaseDate,
-          items: [
-            {
-              id: "item-1",
-              purchaseId: mock.id,
-              fishTypeId: "ft-1",
-              fishTypeName: "Yellowfin Tuna (Thunnus albacares)",
-              fishTypeCode: "YFT-001",
-              grade: "Grade AAA Export",
-              weightKg: 2500,
-              unitPricePerKg: 7.5,
-              totalCost: 18750,
-              temperatureC: -1.5,
-              notes: "Pristine ocean-chilled grade",
-              createdAt: mock.purchaseDate,
-            },
-            {
-              id: "item-2",
-              purchaseId: mock.id,
-              fishTypeId: "ft-2",
-              fishTypeName: "Kingfish / Seer (Scomberomorus commerson)",
-              fishTypeCode: "KGF-002",
-              grade: "Grade A",
-              weightKg: 2000,
-              unitPricePerKg: 6.0,
-              totalCost: 12000,
-              temperatureC: -0.8,
-              notes: "Whole round",
-              createdAt: mock.purchaseDate,
-            },
-          ],
-          payments: [
-            {
-              id: "pay-1",
-              paymentNumber: "VCH-2026-0089",
-              amount: mock.paidAmount,
-              paymentMethod: mock.paymentMethod,
-              paymentDate: mock.purchaseDate,
-              referenceNumber: "NEFT-SBI-991203",
-              notes: "Initial harbor bank transfer",
-            },
-          ],
-        };
-      }
       return null;
     }
 
@@ -386,58 +325,8 @@ export async function getPurchaseById(id: string): Promise<PurchaseDetailDTO | n
         notes: p.notes,
       })),
     };
-  } catch {
-    const mock = getMockPurchasesList().find((p) => p.id === id);
-    if (mock) {
-      return {
-        ...mock,
-        supplierPhone: "+91 98470 11223",
-        supplierBoatName: "St. Peter Trawler #4",
-        createdAt: mock.purchaseDate,
-        updatedAt: mock.purchaseDate,
-        items: [
-          {
-            id: "item-1",
-            purchaseId: mock.id,
-            fishTypeId: "ft-1",
-            fishTypeName: "Yellowfin Tuna (Thunnus albacares)",
-            fishTypeCode: "YFT-001",
-            grade: "Grade AAA Export",
-            weightKg: 2500,
-            unitPricePerKg: 7.5,
-            totalCost: 18750,
-            temperatureC: -1.5,
-            notes: "Pristine ocean-chilled grade",
-            createdAt: mock.purchaseDate,
-          },
-          {
-            id: "item-2",
-            purchaseId: mock.id,
-            fishTypeId: "ft-2",
-            fishTypeName: "Kingfish / Seer (Scomberomorus commerson)",
-            fishTypeCode: "KGF-002",
-            grade: "Grade A",
-            weightKg: 2000,
-            unitPricePerKg: 6.0,
-            totalCost: 12000,
-            temperatureC: -0.8,
-            notes: "Whole round",
-            createdAt: mock.purchaseDate,
-          },
-        ],
-        payments: [
-          {
-            id: "pay-1",
-            paymentNumber: "VCH-2026-0089",
-            amount: mock.paidAmount,
-            paymentMethod: mock.paymentMethod,
-            paymentDate: mock.purchaseDate,
-            referenceNumber: "NEFT-SBI-991203",
-            notes: "Initial harbor bank transfer",
-          },
-        ],
-      };
-    }
+  } catch (error) {
+    console.error(`Failed to fetch purchase detail for ${id}:`, error);
     return null;
   }
 }
@@ -847,162 +736,13 @@ export async function getSuppliersAndFishTypes(): Promise<PurchaseLookupsDTO> {
         isActive: f.isActive,
       })),
     };
-  } catch {
+  } catch (error) {
+    console.error("Failed to fetch purchase lookups:", error);
     return {
-      suppliers: [
-        {
-          id: "sup-1",
-          code: "SUP-001",
-          name: "St. Peter Deep Sea Trawlers",
-          boatName: "St. Peter IV",
-          harborLocation: "Cochin Fisheries Harbour",
-          phone: "+91 98470 11223",
-          email: "peter.trawlers@oceanic.in",
-          balance: 8450.0,
-          rating: 4.9,
-          isActive: true,
-        },
-        {
-          id: "sup-2",
-          code: "SUP-002",
-          name: "Blue Ocean Longliners Co.",
-          boatName: "Blue Wave IX",
-          harborLocation: "Munambam Harbor",
-          phone: "+91 94460 22334",
-          email: "blueocean@gmail.com",
-          balance: 0.0,
-          rating: 4.8,
-          isActive: true,
-        },
-        {
-          id: "sup-3",
-          code: "SUP-003",
-          name: "Mangalore Coastal Fishermen Union",
-          boatName: "Matsya Vahini 02",
-          harborLocation: "Old Port Dock 3",
-          phone: "+91 824 241908",
-          email: "mcfu.mangalore@gov.in",
-          balance: 14200.0,
-          rating: 4.7,
-          isActive: true,
-        },
-      ],
-      fishTypes: [
-        {
-          id: "ft-1",
-          code: "YFT-001",
-          name: "Yellowfin Tuna (Thunnus albacares)",
-          category: "Pelagic Export",
-          grade: "Grade AAA Export",
-          isActive: true,
-        },
-        {
-          id: "ft-2",
-          code: "KGF-002",
-          name: "Kingfish / Seer (Scomberomorus commerson)",
-          category: "Coastal Prime",
-          grade: "Grade A",
-          isActive: true,
-        },
-        {
-          id: "ft-3",
-          code: "PMF-003",
-          name: "Silver Pomfret (Pampus argenteus)",
-          category: "Demersal White",
-          grade: "Grade A Export",
-          isActive: true,
-        },
-        {
-          id: "ft-4",
-          code: "RSP-004",
-          name: "Red Snapper (Lutjanus campechanus)",
-          category: "Reef Fish",
-          grade: "Grade A",
-          isActive: true,
-        },
-        {
-          id: "ft-5",
-          code: "MKR-005",
-          name: "Indian Mackerel (Rastrelliger kanagurta)",
-          category: "Pelagic Small",
-          grade: "Grade B",
-          isActive: true,
-        },
-      ],
+      suppliers: [],
+      fishTypes: [],
     };
   }
-}
-
-// Mock purchases helper
-function getMockPurchasesList(): PurchaseDTO[] {
-  return [
-    {
-      id: "batch-1",
-      purchaseNumber: "PB-2026-0142",
-      supplierId: "sup-1",
-      supplierName: "St. Peter Deep Sea Trawlers",
-      purchaseDate: new Date().toISOString(),
-      status: "COMPLETED",
-      totalWeightKg: 4500.0,
-      subtotal: 30750.0,
-      transportCharges: 350.0,
-      iceCharges: 250.0,
-      labourCharges: 150.0,
-      totalAmount: 31500.0,
-      paidAmount: 31500.0,
-      balanceAmount: 0.0,
-      paymentStatus: "PAID",
-      paymentMethod: "BANK_TRANSFER",
-      landingHarbor: "Cochin Fisheries Harbour",
-      truckNumber: "KL-07-CD-8921",
-      invoiceUrl: "https://res.cloudinary.com/placeholder/doc1.pdf",
-      itemsCount: 2,
-    },
-    {
-      id: "batch-2",
-      purchaseNumber: "PB-2026-0141",
-      supplierId: "sup-2",
-      supplierName: "Blue Ocean Longliners Co.",
-      purchaseDate: new Date(Date.now() - 86400000).toISOString(),
-      status: "INSPECTED",
-      totalWeightKg: 2800.0,
-      subtotal: 21800.0,
-      transportCharges: 300.0,
-      iceCharges: 200.0,
-      labourCharges: 100.0,
-      totalAmount: 22400.0,
-      paidAmount: 15000.0,
-      balanceAmount: 7400.0,
-      paymentStatus: "PARTIAL",
-      paymentMethod: "BANK_TRANSFER",
-      landingHarbor: "Munambam Harbor",
-      truckNumber: "KL-07-AZ-1102",
-      invoiceUrl: null,
-      itemsCount: 2,
-    },
-    {
-      id: "batch-3",
-      purchaseNumber: "PB-2026-0140",
-      supplierId: "sup-3",
-      supplierName: "Mangalore Coastal Fishermen Union",
-      purchaseDate: new Date(Date.now() - 172800000).toISOString(),
-      status: "RECEIVED",
-      totalWeightKg: 6200.0,
-      subtotal: 39500.0,
-      transportCharges: 450.0,
-      iceCharges: 200.0,
-      labourCharges: 150.0,
-      totalAmount: 40300.0,
-      paidAmount: 0.0,
-      balanceAmount: 40300.0,
-      paymentStatus: "UNPAID",
-      paymentMethod: "CHEQUE",
-      landingHarbor: "Old Port Dock 3",
-      truckNumber: "KA-19-M-9043",
-      invoiceUrl: null,
-      itemsCount: 3,
-    },
-  ];
 }
 
 // Backward compatibility alias

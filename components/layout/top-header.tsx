@@ -75,8 +75,8 @@ export const TopHeader = React.memo(function TopHeader({ onMenuClick }: TopHeade
             <UserCircle className="h-5 w-5" />
           </div>
           <div className="hidden lg:flex flex-col text-left">
-            <span className="text-xs font-semibold text-foreground leading-tight">Admin Lead</span>
-            <span className="text-[11px] text-muted-foreground font-mono">admin@hpsseafoods.com</span>
+            <span className="text-xs font-semibold text-foreground leading-tight">Admin</span>
+            <span className="text-[11px] text-muted-foreground font-mono">hpsfooods@gmail.com</span>
           </div>
 
           <Button

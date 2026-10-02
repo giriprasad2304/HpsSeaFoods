@@ -65,7 +65,7 @@ export function PurchaseForm({ suppliers, fishTypes }: PurchaseFormProps) {
     name: "",
     phone: "",
     boatName: "",
-    harborLocation: "Cochin Fisheries Harbour",
+    harborLocation: "",
     contactPerson: "",
     email: "",
     taxNumber: "",

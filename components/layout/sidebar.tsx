@@ -95,7 +95,7 @@ export const Sidebar = React.memo(function Sidebar({ className }: SidebarProps) 
             <div className="flex flex-col min-w-0">
               <span className="truncate font-semibold text-foreground text-xs">HPS SEA FOODS</span>
               <span className="text-[10px] text-muted-foreground truncate font-mono">
-                admin@hpsseafoods.com
+                hpsfooods@gmail.com
               </span>
             </div>
           </div>

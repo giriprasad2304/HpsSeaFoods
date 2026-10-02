@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Fish, Lock, Mail, ArrowRight, ShieldCheck, KeyRound, Sparkles, CheckCircle2 } from "lucide-react";
+import { Fish, Lock, Mail, ArrowRight, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -11,11 +11,10 @@ import { ThemeToggle } from "@/components/theme/theme-toggle";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = React.useState("admin@hpsseafoods.com");
-  const [password, setPassword] = React.useState("admin123");
+  const [email, setEmail] = React.useState("");
+  const [password, setPassword] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
-  const [isCopied, setIsCopied] = React.useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -52,14 +51,6 @@ export default function LoginPage() {
     }
   }
 
-  function handleFillDemo() {
-    setEmail("admin@hpsseafoods.com");
-    setPassword("admin123");
-    setError(null);
-    setIsCopied(true);
-    setTimeout(() => setIsCopied(false), 2000);
-  }
-
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-background text-foreground p-4 sm:p-6 relative selection:bg-primary/20">
       <div className="absolute top-4 right-4 z-10">
@@ -80,60 +71,12 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Credentials helper card */}
-        <div className="rounded-xl border border-primary/20 bg-primary/5 p-3.5 space-y-2.5">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-primary flex items-center gap-1.5">
-              <KeyRound className="h-3.5 w-3.5" />
-              Demo Test Credentials
-            </span>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleFillDemo}
-              className="h-7 px-2.5 text-[11px] font-medium gap-1 bg-background hover:bg-muted"
-            >
-              {isCopied ? (
-                <>
-                  <CheckCircle2 className="h-3 w-3 text-emerald-500" />
-                  Filled!
-                </>
-              ) : (
-                <>
-                  <Sparkles className="h-3 w-3 text-primary" />
-                  Auto-fill
-                </>
-              )}
-            </Button>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <div className="rounded-lg bg-background/80 p-2 border border-border/60">
-              <span className="text-[10px] uppercase font-medium text-muted-foreground block">
-                Email
-              </span>
-              <span className="font-mono text-xs font-semibold text-foreground select-all">
-                admin@hpsseafoods.com
-              </span>
-            </div>
-            <div className="rounded-lg bg-background/80 p-2 border border-border/60">
-              <span className="text-[10px] uppercase font-medium text-muted-foreground block">
-                Password
-              </span>
-              <span className="font-mono text-xs font-semibold text-foreground select-all">
-                admin123
-              </span>
-            </div>
-          </div>
-        </div>
-
         {/* Login Card */}
         <Card className="border-border/80 bg-card shadow-md">
           <CardHeader className="space-y-1 pb-4">
             <CardTitle className="text-base text-foreground font-semibold">Sign In to Dashboard</CardTitle>
             <CardDescription className="text-xs text-muted-foreground">
-              Enter your authorized staff or administrator credentials
+              Enter your authorized credentials to access the portal
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -150,7 +93,7 @@ export default function LoginPage() {
                 </label>
                 <Input
                   type="email"
-                  placeholder="admin@hpsseafoods.com"
+                  placeholder="name@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="h-9.5 text-xs sm:text-sm bg-background font-mono"

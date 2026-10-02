@@ -40,8 +40,8 @@ async function main() {
   await prisma.user.create({
     data: {
       supabaseId: "demo-admin-supabase-id-001",
-      email: "admin@coastalfresh.test",
-      name: "Demo Admin",
+      email: "hpsfooods@gmail.com",
+      name: "HPS Admin",
       role: "ADMIN",
       phone: "+91 90000 00001",
       isActive: true,

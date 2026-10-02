@@ -23,17 +23,11 @@ export async function POST(request: Request) {
     let userName = null;
 
     if (
-      (normalizedEmail === "admin@hpsseafoods.com" || normalizedEmail === "admin@coastalfresh.test") &&
-      (password === "admin123" || password === "Admin@123")
+      normalizedEmail === "hpsfooods@gmail.com" &&
+      password === "Prasanth@0046"
     ) {
       authenticatedRole = "ADMIN";
-      userName = "Admin Operations Lead";
-    } else if (
-      normalizedEmail === "staff@hpsseafoods.com" &&
-      password === "staff123"
-    ) {
-      authenticatedRole = "STAFF";
-      userName = "Operations Staff";
+      userName = "HPS Admin";
     }
 
     // Optional check in database if exists
@@ -43,9 +37,9 @@ export async function POST(request: Request) {
         dbUser = await prisma.user.findFirst({
           where: { email: { equals: normalizedEmail, mode: "insensitive" } },
         });
-        if (dbUser && password === "admin123") {
+        if (dbUser && password === "Prasanth@0046") {
           authenticatedRole = dbUser.role || "ADMIN";
-          userName = dbUser.name || "Authorized User";
+          userName = dbUser.name || "HPS Admin";
         }
       } catch {
         // Fallback
@@ -54,7 +48,7 @@ export async function POST(request: Request) {
 
     if (!authenticatedRole) {
       return NextResponse.json(
-        { error: "Invalid email or password. Please use the credentials shown in the testing box." },
+        { error: "Invalid email or password. Please try again." },
         { status: 401 }
       );
     }
@@ -62,7 +56,7 @@ export async function POST(request: Request) {
     const user = {
       id: dbUser?.id || "admin-001",
       email: normalizedEmail,
-      name: userName || "Admin Operations Lead",
+      name: userName || "HPS Admin",
       role: authenticatedRole,
     };
 
