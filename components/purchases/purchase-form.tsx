@@ -55,8 +55,35 @@ const PAYMENT_METHODS = [
 export function PurchaseForm({ suppliers, fishTypes }: PurchaseFormProps) {
   const router = useRouter();
   const [supplierList, setSupplierList] = React.useState<SupplierDTO[]>(suppliers);
+  const [fishTypeList, setFishTypeList] = React.useState<FishTypeDTO[]>(fishTypes);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (fishTypes && fishTypes.length > 0) setFishTypeList(fishTypes);
+  }, [fishTypes]);
+
+  React.useEffect(() => {
+    if (suppliers && suppliers.length > 0) setSupplierList(suppliers);
+  }, [suppliers]);
+
+  React.useEffect(() => {
+    async function refreshLookups() {
+      try {
+        const res = await fetch("/api/purchases/lookups");
+        if (res.ok) {
+          const json = await res.json();
+          if (json.data?.fishTypes && Array.isArray(json.data.fishTypes)) {
+            setFishTypeList(json.data.fishTypes);
+          }
+          if (json.data?.suppliers && Array.isArray(json.data.suppliers)) {
+            setSupplierList(json.data.suppliers);
+          }
+        }
+      } catch {}
+    }
+    refreshLookups();
+  }, []);
 
   // Quick Add Supplier Dialog State
   const [showAddSupplier, setShowAddSupplier] = React.useState(false);
@@ -486,7 +513,7 @@ export function PurchaseForm({ suppliers, fishTypes }: PurchaseFormProps) {
                         className="h-8 text-xs"
                       >
                         <option value="">Select Fish...</option>
-                        {fishTypes.map((ft) => (
+                        {fishTypeList.map((ft) => (
                           <option key={ft.id} value={ft.id}>
                             {ft.name} ({ft.code})
                           </option>

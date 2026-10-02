@@ -57,8 +57,43 @@ const PAYMENT_METHODS = [
 export function SalesForm({ customers, fishTypes }: SalesFormProps) {
   const router = useRouter();
   const [customerList, setCustomerList] = React.useState<CustomerDTO[]>(customers);
+  const [fishTypeList, setFishTypeList] = React.useState<FishTypeWithStockDTO[]>(fishTypes);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+
+  // Sync prop updates
+  React.useEffect(() => {
+    if (fishTypes && fishTypes.length > 0) {
+      setFishTypeList(fishTypes);
+    }
+  }, [fishTypes]);
+
+  React.useEffect(() => {
+    if (customers && customers.length > 0) {
+      setCustomerList(customers);
+    }
+  }, [customers]);
+
+  // Client-side refresh on mount to ensure latest live inventory stock
+  React.useEffect(() => {
+    async function refreshLookups() {
+      try {
+        const res = await fetch("/api/sales/lookups");
+        if (res.ok) {
+          const json = await res.json();
+          if (json.data?.fishTypes && Array.isArray(json.data.fishTypes)) {
+            setFishTypeList(json.data.fishTypes);
+          }
+          if (json.data?.customers && Array.isArray(json.data.customers)) {
+            setCustomerList(json.data.customers);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to auto-refresh sales lookups:", err);
+      }
+    }
+    refreshLookups();
+  }, []);
 
   // Quick Add Customer Dialog state
   const [showAddCustomer, setShowAddCustomer] = React.useState(false);
@@ -98,7 +133,7 @@ export function SalesForm({ customers, fishTypes }: SalesFormProps) {
 
   // Authoritative calculations on client preview
   const calculatedItems = items.map((item) => {
-    const selectedFish = fishTypes.find((f) => f.id === item.fishTypeId);
+    const selectedFish = fishTypeList.find((f) => f.id === item.fishTypeId);
     const availableStock = selectedFish ? selectedFish.availableStockKg : 0;
     const isOverStock = item.fishTypeId && item.weightKg > availableStock;
     return {
@@ -515,7 +550,7 @@ export function SalesForm({ customers, fishTypes }: SalesFormProps) {
                           className="h-8 text-xs"
                         >
                           <option value="">Select Fish Variety...</option>
-                          {fishTypes.map((ft) => (
+                          {fishTypeList.map((ft) => (
                             <option key={ft.id} value={ft.id}>
                               {ft.name} ({ft.code}) — {formatWeight(ft.availableStockKg)} avail
                             </option>

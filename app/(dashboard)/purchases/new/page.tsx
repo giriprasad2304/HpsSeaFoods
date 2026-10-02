@@ -6,6 +6,9 @@ export const metadata = {
   title: "New Purchase | HPS SEA FOODS",
 };
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function NewPurchasePage() {
   const lookups = await getSuppliersAndFishTypes();
 
