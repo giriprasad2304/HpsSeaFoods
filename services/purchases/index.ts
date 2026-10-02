@@ -11,6 +11,7 @@ import type {
   PurchaseFilterParams,
   CreatePurchaseInput,
   UpdatePurchaseInput,
+  UpdatePurchaseSpoilageInput,
   RecordPurchasePaymentInput,
   PurchaseLookupsDTO,
   PaymentStatus,
@@ -309,6 +310,9 @@ export async function getPurchaseById(id: string): Promise<PurchaseDetailDTO | n
         grade: item.grade,
         fishCount: item.fishCount,
         weightKg: item.weightKg,
+        spoiledWeightKg: item.spoiledWeightKg ?? 0,
+        spoilageReason: item.spoilageReason ?? null,
+        effectiveWeightKg: Math.max(0, Number((item.weightKg - (item.spoiledWeightKg ?? 0)).toFixed(2))),
         unitPricePerKg: item.unitPricePerKg,
         totalCost: item.totalCost,
         temperatureC: item.temperatureC,
@@ -797,3 +801,133 @@ export async function createSupplier(data: {
     isActive: supplier.isActive,
   };
 }
+
+/**
+ * Updates spoilage / rejected quantities and reasons for items within a purchase batch.
+ * Recalculates payable subtotal, total amount, balance amount, payment status, and updates supplier balance.
+ */
+export async function updatePurchaseSpoilage(
+  purchaseId: string,
+  input: UpdatePurchaseSpoilageInput,
+  userId?: string
+) {
+  return await prisma.$transaction(async (tx) => {
+    const purchase = await tx.purchase.findUnique({
+      where: { id: purchaseId },
+      include: {
+        supplier: true,
+        items: true,
+      },
+    });
+
+    if (!purchase) {
+      throw new Error(`Purchase with ID ${purchaseId} not found`);
+    }
+
+    // Apply spoilage updates to each specified item
+    for (const itemInput of input.items) {
+      const existingItem = purchase.items.find((i) => i.id === itemInput.itemId);
+      if (!existingItem) continue;
+
+      const spoiledKg = Math.max(
+        0,
+        Math.min(existingItem.weightKg, Number(itemInput.spoiledWeightKg) || 0)
+      );
+      const effectiveKg = Math.max(0, existingItem.weightKg - spoiledKg);
+      const newTotalCost = Number(
+        (effectiveKg * existingItem.unitPricePerKg).toFixed(2)
+      );
+
+      await tx.purchaseItem.update({
+        where: { id: itemInput.itemId },
+        data: {
+          spoiledWeightKg: spoiledKg,
+          spoilageReason: itemInput.spoilageReason ? itemInput.spoilageReason.trim() : null,
+          totalCost: newTotalCost,
+        },
+      });
+    }
+
+    // Fetch updated items to recalculate totals
+    const updatedItems = await tx.purchaseItem.findMany({
+      where: { purchaseId },
+    });
+
+    const newSubtotal = Number(
+      updatedItems.reduce((sum, item) => sum + item.totalCost, 0).toFixed(2)
+    );
+    const newTotalAmount = Number(
+      Math.max(
+        0,
+        newSubtotal +
+          purchase.transportCharges +
+          purchase.iceCharges +
+          purchase.labourCharges
+      ).toFixed(2)
+    );
+    const newBalanceAmount = Number(
+      Math.max(0, newTotalAmount - purchase.paidAmount).toFixed(2)
+    );
+
+    let newPaymentStatus: PaymentStatus = purchase.paymentStatus as PaymentStatus;
+    if (purchase.paidAmount >= newTotalAmount && newTotalAmount > 0) {
+      newPaymentStatus = "PAID";
+    } else if (purchase.paidAmount > 0) {
+      newPaymentStatus = "PARTIAL";
+    } else {
+      newPaymentStatus = "UNPAID";
+    }
+
+    const deltaTotal = Number((newTotalAmount - purchase.totalAmount).toFixed(2));
+
+    const updatedPurchase = await tx.purchase.update({
+      where: { id: purchaseId },
+      data: {
+        subtotal: newSubtotal,
+        totalAmount: newTotalAmount,
+        balanceAmount: newBalanceAmount,
+        paymentStatus: newPaymentStatus,
+      },
+      include: {
+        supplier: true,
+        items: {
+          include: {
+            fishType: true,
+          },
+        },
+        payments: true,
+      },
+    });
+
+    // Update supplier balance if financial total changed
+    if (deltaTotal !== 0) {
+      await tx.supplier.update({
+        where: { id: purchase.supplierId },
+        data: {
+          balance: {
+            increment: deltaTotal,
+          },
+        },
+      });
+    }
+
+    if (userId) {
+      await logAuditEvent({
+        userId,
+        action: "UPDATE",
+        entity: "Purchase",
+        entityId: purchaseId,
+        metadata: {
+          event: "Purchase spoilage / rejection recorded",
+          purchaseNumber: purchase.purchaseNumber,
+          oldTotal: purchase.totalAmount,
+          newTotal: newTotalAmount,
+          delta: deltaTotal,
+        },
+      });
+    }
+
+    return updatedPurchase;
+  });
+}
+

@@ -17,6 +17,8 @@ import {
   CheckCircle,
   Receipt,
   Plus,
+  AlertTriangle,
+  Edit3,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +34,13 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
+import {
+  Dialog,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { formatCurrency, formatWeight, formatDate } from "@/lib/utils";
 import { STATUS_BADGE_VARIANTS, DELIVERY_STATUSES } from "@/constants";
 import type { SaleDetailDTO } from "@/types";
@@ -55,13 +64,27 @@ function formatPaymentMethod(method: string): string {
   );
 }
 
+interface SpoilageItemState {
+  itemId: string;
+  fishTypeName: string;
+  fishTypeCode: string;
+  grade: string;
+  weightKg: number;
+  spoiledWeightKg: number;
+  spoilageReason: string;
+  unitPricePerKg: number;
+}
+
 export function SaleDetails({ sale }: SaleDetailsProps) {
   const router = useRouter();
   const [showDeleteDialog, setShowDeleteDialog] = React.useState(false);
   const [showPaymentForm, setShowPaymentForm] = React.useState(false);
+  const [showSpoilageDialog, setShowSpoilageDialog] = React.useState(false);
   const [isDeleting, setIsDeleting] = React.useState(false);
   const [isRecordingPayment, setIsRecordingPayment] = React.useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = React.useState(false);
+  const [isSavingSpoilage, setIsSavingSpoilage] = React.useState(false);
+  const [spoilageError, setSpoilageError] = React.useState<string | null>(null);
 
   // Status state
   const [currentStatus, setCurrentStatus] = React.useState(sale.status);
@@ -74,6 +97,82 @@ export function SaleDetails({ sale }: SaleDetailsProps) {
   );
   const [paymentRef, setPaymentRef] = React.useState("");
   const [paymentNotes, setPaymentNotes] = React.useState("");
+
+  // Spoilage state
+  const [spoilageItems, setSpoilageItems] = React.useState<SpoilageItemState[]>(
+    []
+  );
+
+  const openSpoilageDialog = () => {
+    setSpoilageItems(
+      sale.items.map((item) => ({
+        itemId: item.id,
+        fishTypeName: item.fishTypeName,
+        fishTypeCode: item.fishTypeCode,
+        grade: item.grade,
+        weightKg: item.weightKg,
+        spoiledWeightKg: item.spoiledWeightKg ?? 0,
+        spoilageReason: item.spoilageReason ?? "",
+        unitPricePerKg: item.unitPricePerKg,
+      }))
+    );
+    setSpoilageError(null);
+    setShowSpoilageDialog(true);
+  };
+
+  const handleSpoilageChange = (
+    itemId: string,
+    field: "spoiledWeightKg" | "spoilageReason",
+    value: string | number
+  ) => {
+    setSpoilageItems((prev) =>
+      prev.map((item) => {
+        if (item.itemId === itemId) {
+          if (field === "spoiledWeightKg") {
+            const num = typeof value === "number" ? value : parseFloat(value) || 0;
+            const clamped = Math.max(0, Math.min(item.weightKg, num));
+            return { ...item, spoiledWeightKg: clamped };
+          }
+          return { ...item, spoilageReason: String(value) };
+        }
+        return item;
+      })
+    );
+  };
+
+  async function handleSaveSpoilage() {
+    setIsSavingSpoilage(true);
+    setSpoilageError(null);
+    try {
+      const payload = {
+        items: spoilageItems.map((item) => ({
+          itemId: item.itemId,
+          spoiledWeightKg: item.spoiledWeightKg,
+          spoilageReason: item.spoilageReason.trim() || null,
+        })),
+      };
+
+      const res = await fetch(`/api/sales/${sale.id}/spoilage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to save spoilage records");
+      }
+
+      setShowSpoilageDialog(false);
+      router.refresh();
+    } catch (error: unknown) {
+      const msg =
+        error instanceof Error ? error.message : "Failed to record spoilage";
+      setSpoilageError(msg);
+    } finally {
+      setIsSavingSpoilage(false);
+    }
+  }
 
   async function handleStatusChange(newStatus: string) {
     setIsUpdatingStatus(true);
@@ -135,6 +234,16 @@ export function SaleDetails({ sale }: SaleDetailsProps) {
     }
   }
 
+  const totalSpoiledKg = sale.items.reduce(
+    (sum, item) => sum + (item.spoiledWeightKg ?? 0),
+    0
+  );
+  const totalEffectiveKg = sale.items.reduce(
+    (sum, item) =>
+      sum + (item.effectiveWeightKg ?? Math.max(0, item.weightKg - (item.spoiledWeightKg ?? 0))),
+    0
+  );
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -165,6 +274,12 @@ export function SaleDetails({ sale }: SaleDetailsProps) {
               >
                 {sale.paymentStatus}
               </Badge>
+              {totalSpoiledKg > 0 && (
+                <Badge variant="destructive" className="gap-1 text-xs">
+                  <AlertTriangle className="h-3 w-3" />
+                  {formatWeight(totalSpoiledKg)} Spoiled / Deducted
+                </Badge>
+              )}
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
               {sale.customerName} • {formatDate(sale.saleDate)}
@@ -188,6 +303,17 @@ export function SaleDetails({ sale }: SaleDetailsProps) {
               ))}
             </Select>
           </div>
+
+          {/* Record Delivery Spoilage Button */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 text-xs text-amber-600 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/10"
+            onClick={openSpoilageDialog}
+          >
+            <AlertTriangle className="h-3.5 w-3.5" />
+            {totalSpoiledKg > 0 ? "Edit Delivery Spoilage" : "Record Delivery Spoilage"}
+          </Button>
 
           {sale.paymentStatus !== "PAID" && (
             <Button
@@ -409,52 +535,95 @@ export function SaleDetails({ sale }: SaleDetailsProps) {
 
           {/* Fish Items Table */}
           <Card>
-            <CardHeader className="pb-4">
+            <CardHeader className="pb-4 flex flex-row items-center justify-between">
               <CardTitle className="text-sm flex items-center gap-2">
                 <Package className="h-4 w-4" />
                 Fish Varieties Sold ({sale.items.length})
               </CardTitle>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs gap-1 text-amber-600 dark:text-amber-400"
+                onClick={openSpoilageDialog}
+              >
+                <AlertTriangle className="h-3 w-3" />
+                Adjust Spoilage
+              </Button>
             </CardHeader>
             <CardContent className="p-0">
               <div className="overflow-x-auto">
-                <Table className="min-w-[500px]">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Fish Variety</TableHead>
-                    <TableHead>Grade</TableHead>
-                    <TableHead className="text-right">Qty (kg)</TableHead>
-                    <TableHead className="text-right">Price / kg</TableHead>
-                    <TableHead className="text-right">Item Total</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {sale.items.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell>
-                        <div>
-                          <span className="text-xs font-medium">
-                            {item.fishTypeName}
-                          </span>
-                          <br />
-                          <span className="text-[10px] font-mono text-muted-foreground">
-                            {item.fishTypeCode}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-xs">{item.grade}</TableCell>
-                      <TableCell className="text-right text-xs font-mono font-medium">
-                        {formatWeight(item.weightKg)}
-                      </TableCell>
-                      <TableCell className="text-right text-xs font-mono">
-                        {formatCurrency(item.unitPricePerKg)}
-                      </TableCell>
-                      <TableCell className="text-right text-xs font-mono font-semibold">
-                        {formatCurrency(item.totalPrice)}
-                      </TableCell>
+                <Table className="min-w-[650px]">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Fish Variety</TableHead>
+                      <TableHead>Grade</TableHead>
+                      <TableHead className="text-right">Dispatched (kg)</TableHead>
+                      <TableHead className="text-center">Spoiled / Rejected</TableHead>
+                      <TableHead className="text-right">Billable Qty (kg)</TableHead>
+                      <TableHead className="text-right">Price / kg</TableHead>
+                      <TableHead className="text-right">Billed Total</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {sale.items.map((item) => {
+                      const spoiledKg = item.spoiledWeightKg ?? 0;
+                      const effectiveKg =
+                        item.effectiveWeightKg ??
+                        Math.max(0, item.weightKg - spoiledKg);
+                      return (
+                        <TableRow key={item.id}>
+                          <TableCell>
+                            <div>
+                              <span className="text-xs font-semibold">
+                                {item.fishTypeName}
+                              </span>
+                              <br />
+                              <span className="text-[10px] font-mono text-muted-foreground">
+                                {item.fishTypeCode}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-xs">{item.grade}</TableCell>
+                          <TableCell className="text-right text-xs font-mono font-medium">
+                            {formatWeight(item.weightKg)}
+                          </TableCell>
+                          <TableCell className="text-center text-xs">
+                            {spoiledKg > 0 ? (
+                              <div className="inline-flex flex-col items-center">
+                                <Badge
+                                  variant="destructive"
+                                  className="text-[10px] font-mono px-1.5 py-0 cursor-pointer hover:opacity-80"
+                                  onClick={openSpoilageDialog}
+                                >
+                                  -{formatWeight(spoiledKg)}
+                                </Badge>
+                                {item.spoilageReason && (
+                                  <span
+                                    className="text-[10px] text-muted-foreground max-w-[120px] truncate mt-0.5"
+                                    title={item.spoilageReason}
+                                  >
+                                    {item.spoilageReason}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground text-xs">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right text-xs font-mono font-bold text-primary">
+                            {formatWeight(effectiveKg)}
+                          </TableCell>
+                          <TableCell className="text-right text-xs font-mono">
+                            {formatCurrency(item.unitPricePerKg)}
+                          </TableCell>
+                          <TableCell className="text-right text-xs font-mono font-semibold">
+                            {formatCurrency(item.totalPrice)}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
               </div>
             </CardContent>
           </Card>
@@ -471,37 +640,37 @@ export function SaleDetails({ sale }: SaleDetailsProps) {
               <CardContent className="p-0">
                 <div className="overflow-x-auto">
                   <Table className="min-w-[500px]">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Receipt #</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Method</TableHead>
-                      <TableHead>Reference</TableHead>
-                      <TableHead className="text-right">Amount Received</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {sale.payments.map((payment) => (
-                      <TableRow key={payment.id}>
-                        <TableCell className="text-xs font-mono font-semibold text-primary">
-                          {payment.paymentNumber}
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
-                          {formatDate(payment.paymentDate)}
-                        </TableCell>
-                        <TableCell className="text-xs">
-                          {formatPaymentMethod(payment.paymentMethod)}
-                        </TableCell>
-                        <TableCell className="text-xs font-mono text-muted-foreground">
-                          {payment.referenceNumber || "—"}
-                        </TableCell>
-                        <TableCell className="text-right text-xs font-mono font-semibold text-emerald-600">
-                          {formatCurrency(payment.amount)}
-                        </TableCell>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Receipt #</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Method</TableHead>
+                        <TableHead>Reference</TableHead>
+                        <TableHead className="text-right">Amount Received</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {sale.payments.map((payment) => (
+                        <TableRow key={payment.id}>
+                          <TableCell className="text-xs font-mono font-semibold text-primary">
+                            {payment.paymentNumber}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {formatDate(payment.paymentDate)}
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            {formatPaymentMethod(payment.paymentMethod)}
+                          </TableCell>
+                          <TableCell className="text-xs font-mono text-muted-foreground">
+                            {payment.referenceNumber || "—"}
+                          </TableCell>
+                          <TableCell className="text-right text-xs font-mono font-semibold text-emerald-600">
+                            {formatCurrency(payment.amount)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
               </CardContent>
             </Card>
@@ -589,13 +758,33 @@ export function SaleDetails({ sale }: SaleDetailsProps) {
             </CardHeader>
             <CardContent className="space-y-2">
               <div className="flex justify-between text-xs">
-                <span className="text-muted-foreground">Total Dispatched Weight</span>
+                <span className="text-muted-foreground">Dispatched Gross Weight</span>
                 <span className="font-mono font-medium">
                   {formatWeight(sale.totalWeightKg)}
                 </span>
               </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-muted-foreground">Items Subtotal</span>
+
+              {totalSpoiledKg > 0 && (
+                <>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1">
+                      <AlertTriangle className="h-3 w-3" /> Spoiled / Rejected Loss
+                    </span>
+                    <span className="font-mono text-amber-600 dark:text-amber-400 font-medium">
+                      -{formatWeight(totalSpoiledKg)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-xs font-semibold bg-primary/10 px-2 py-1 rounded">
+                    <span className="text-foreground">Net Billable Weight</span>
+                    <span className="font-mono text-primary">
+                      {formatWeight(totalEffectiveKg)}
+                    </span>
+                  </div>
+                </>
+              )}
+
+              <div className="flex justify-between text-xs pt-1">
+                <span className="text-muted-foreground">Billable Items Subtotal</span>
                 <span className="font-mono">{formatCurrency(sale.subtotal)}</span>
               </div>
 
@@ -630,7 +819,7 @@ export function SaleDetails({ sale }: SaleDetailsProps) {
                 </span>
               </div>
               <div className="flex justify-between text-xs font-semibold">
-                <span className="text-muted-foreground">Due Amount</span>
+                <span className="text-muted-foreground">Due Balance</span>
                 <span
                   className={`font-mono ${
                     sale.balanceAmount > 0
@@ -674,6 +863,129 @@ export function SaleDetails({ sale }: SaleDetailsProps) {
           </Card>
         </div>
       </div>
+
+      {/* Spoilage / Rejection Management Dialog */}
+      <Dialog open={showSpoilageDialog} onOpenChange={setShowSpoilageDialog}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-amber-500" />
+            Update Delivery Spoilage / Rejected Fish
+          </DialogTitle>
+          <DialogDescription>
+            Enter spoiled or rejected weight (kg) delivered for invoice #{sale.saleNumber}. Billable delivered weight, items total, and customer balance will recalculate automatically.
+          </DialogDescription>
+        </DialogHeader>
+
+        {spoilageError && (
+          <div className="p-3 mb-3 text-xs bg-destructive/10 border border-destructive/20 text-destructive rounded-lg">
+            {spoilageError}
+          </div>
+        )}
+
+        <div className="max-h-[60vh] overflow-y-auto space-y-4 py-2 pr-1">
+          {spoilageItems.map((item) => {
+            const effectiveKg = Math.max(0, item.weightKg - item.spoiledWeightKg);
+            const revisedTotal = Number((effectiveKg * item.unitPricePerKg).toFixed(2));
+
+            return (
+              <div
+                key={item.itemId}
+                className="p-3 border rounded-lg bg-card/60 space-y-3"
+              >
+                <div className="flex items-start justify-between">
+                  <div>
+                    <span className="text-xs font-bold text-foreground">
+                      {item.fishTypeName}
+                    </span>
+                    <span className="text-[10px] font-mono text-muted-foreground ml-2">
+                      ({item.fishTypeCode} • {item.grade})
+                    </span>
+                    <div className="text-[11px] text-muted-foreground mt-0.5">
+                      Dispatched: <strong className="text-foreground font-mono">{item.weightKg} kg</strong> @ <strong className="text-foreground font-mono">{formatCurrency(item.unitPricePerKg)}/kg</strong>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-xs font-semibold text-primary font-mono">
+                      Revised: {formatCurrency(revisedTotal)}
+                    </span>
+                    <div className="text-[10px] text-muted-foreground font-mono">
+                      Billable: {effectiveKg.toFixed(2)} kg
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-medium text-foreground">
+                      Spoiled / Rejected (kg)
+                    </label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      max={item.weightKg}
+                      value={item.spoiledWeightKg === 0 ? "" : item.spoiledWeightKg}
+                      onChange={(e) =>
+                        handleSpoilageChange(
+                          item.itemId,
+                          "spoiledWeightKg",
+                          e.target.value
+                        )
+                      }
+                      placeholder="0.00"
+                      className="h-8 text-xs font-mono"
+                    />
+                    <span className="text-[10px] text-muted-foreground">
+                      Max: {item.weightKg} kg
+                    </span>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-medium text-foreground">
+                      Reason / Cause
+                    </label>
+                    <Input
+                      type="text"
+                      value={item.spoilageReason}
+                      onChange={(e) =>
+                        handleSpoilageChange(
+                          item.itemId,
+                          "spoilageReason",
+                          e.target.value
+                        )
+                      }
+                      placeholder="e.g., Ice melted, quality issue"
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <DialogFooter className="mt-4 flex items-center justify-between border-t border-border pt-4">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setShowSpoilageDialog(false)}
+            disabled={isSavingSpoilage}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            onClick={handleSaveSpoilage}
+            disabled={isSavingSpoilage}
+            className="gap-1.5"
+          >
+            {isSavingSpoilage && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            {isSavingSpoilage ? "Updating..." : "Save Spoilage & Update Invoice"}
+          </Button>
+        </DialogFooter>
+      </Dialog>
 
       {/* Delete Confirmation Dialog */}
       <ConfirmationDialog

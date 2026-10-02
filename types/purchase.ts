@@ -24,12 +24,25 @@ export interface PurchaseItemDetailDTO {
   fishTypeCode: string;
   grade: string;
   fishCount?: number | null;
-  weightKg: number;
+  weightKg: number; // Landed gross weight
+  spoiledWeightKg?: number; // Rejected / spoiled weight
+  spoilageReason?: string | null;
+  effectiveWeightKg?: number; // weightKg - spoiledWeightKg
   unitPricePerKg: number;
   totalCost: number;
   temperatureC?: number | null;
   notes?: string | null;
   createdAt: string;
+}
+
+export interface UpdatePurchaseSpoilageItemInput {
+  itemId: string;
+  spoiledWeightKg: number;
+  spoilageReason?: string | null;
+}
+
+export interface UpdatePurchaseSpoilageInput {
+  items: UpdatePurchaseSpoilageItemInput[];
 }
 
 export interface CreatePurchaseInput {

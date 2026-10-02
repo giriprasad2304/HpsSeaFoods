@@ -11,6 +11,7 @@ import type {
   SaleFilterParams,
   CreateSaleInput,
   UpdateSaleInput,
+  UpdateSaleSpoilageInput,
   RecordSalePaymentInput,
   SalesLookupsDTO,
   PaymentStatus,
@@ -329,6 +330,9 @@ export async function getSaleById(id: string): Promise<SaleDetailDTO | null> {
         fishTypeCode: item.fishType.code,
         grade: item.grade,
         weightKg: item.weightKg,
+        spoiledWeightKg: item.spoiledWeightKg ?? 0,
+        spoilageReason: item.spoilageReason ?? null,
+        effectiveWeightKg: Math.max(0, Number((item.weightKg - (item.spoiledWeightKg ?? 0)).toFixed(2))),
         unitPricePerKg: item.unitPricePerKg,
         totalPrice: item.totalPrice,
         notes: item.notes,
@@ -836,4 +840,127 @@ export async function getCustomersAndFishTypes(): Promise<SalesLookupsDTO> {
 
 // Backward compatibility alias
 export const getSalesList = listSales;
+
+/**
+ * Updates spoilage / rejected quantities and reasons for items within a sale.
+ * Recalculates billable subtotal, total amount, balance amount, payment status, and updates customer balance.
+ */
+export async function updateSaleSpoilage(
+  saleId: string,
+  input: UpdateSaleSpoilageInput,
+  userId?: string
+) {
+  return await prisma.$transaction(async (tx) => {
+    const sale = await tx.sale.findUnique({
+      where: { id: saleId },
+      include: {
+        customer: true,
+        items: true,
+      },
+    });
+
+    if (!sale) {
+      throw new Error(`Sale with ID ${saleId} not found`);
+    }
+
+    // Apply spoilage updates to each specified item
+    for (const itemInput of input.items) {
+      const existingItem = sale.items.find((i) => i.id === itemInput.itemId);
+      if (!existingItem) continue;
+
+      const spoiledKg = Math.max(
+        0,
+        Math.min(existingItem.weightKg, Number(itemInput.spoiledWeightKg) || 0)
+      );
+      const effectiveKg = Math.max(0, existingItem.weightKg - spoiledKg);
+      const newTotalPrice = Number(
+        (effectiveKg * existingItem.unitPricePerKg).toFixed(2)
+      );
+
+      await tx.saleItem.update({
+        where: { id: itemInput.itemId },
+        data: {
+          spoiledWeightKg: spoiledKg,
+          spoilageReason: itemInput.spoilageReason ? itemInput.spoilageReason.trim() : null,
+          totalPrice: newTotalPrice,
+        },
+      });
+    }
+
+    // Fetch updated items to recalculate totals
+    const updatedItems = await tx.saleItem.findMany({
+      where: { saleId },
+    });
+
+    const newSubtotal = Number(
+      updatedItems.reduce((sum, item) => sum + item.totalPrice, 0).toFixed(2)
+    );
+    const newTotalAmount = Number(
+      Math.max(0, newSubtotal + sale.taxAmount - sale.discountAmount).toFixed(2)
+    );
+    const newBalanceAmount = Number(
+      Math.max(0, newTotalAmount - sale.paidAmount).toFixed(2)
+    );
+
+    let newPaymentStatus: PaymentStatus = sale.paymentStatus as PaymentStatus;
+    if (sale.paidAmount >= newTotalAmount && newTotalAmount > 0) {
+      newPaymentStatus = "PAID";
+    } else if (sale.paidAmount > 0) {
+      newPaymentStatus = "PARTIAL";
+    } else {
+      newPaymentStatus = "UNPAID";
+    }
+
+    const deltaTotal = Number((newTotalAmount - sale.totalAmount).toFixed(2));
+
+    const updatedSale = await tx.sale.update({
+      where: { id: saleId },
+      data: {
+        subtotal: newSubtotal,
+        totalAmount: newTotalAmount,
+        balanceAmount: newBalanceAmount,
+        paymentStatus: newPaymentStatus,
+      },
+      include: {
+        customer: true,
+        items: {
+          include: {
+            fishType: true,
+          },
+        },
+        payments: true,
+      },
+    });
+
+    // Update customer outstanding balance if financial total changed
+    if (deltaTotal !== 0) {
+      await tx.customer.update({
+        where: { id: sale.customerId },
+        data: {
+          outstandingBalance: {
+            increment: deltaTotal,
+          },
+        },
+      });
+    }
+
+    if (userId) {
+      await logAuditEvent({
+        userId,
+        action: "UPDATE",
+        entity: "Sale",
+        entityId: saleId,
+        metadata: {
+          event: "Delivery spoilage recorded / updated",
+          saleNumber: sale.saleNumber,
+          oldTotal: sale.totalAmount,
+          newTotal: newTotalAmount,
+          delta: deltaTotal,
+        },
+      });
+    }
+
+    return updatedSale;
+  });
+}
 

@@ -188,9 +188,11 @@ model PurchaseItem {
   fishType              FishType               @relation(fields: [fishTypeId], references: [id])
   grade                 String                 @default("Grade A")
   fishCount             Int?
-  weightKg              Float // Quantity in kg
+  weightKg              Float // Gross Quantity in kg
+  spoiledWeightKg       Float                  @default(0.0) // Spoiled / Rejected quantity in kg
+  spoilageReason        String? // Reason for rejection or spoilage
   unitPricePerKg        Float // Rate per kg
-  totalCost             Float // Quantity * Rate per kg
+  totalCost             Float // (weightKg - spoiledWeightKg) * Rate per kg
   temperatureC          Float?
   notes                 String?
   createdAt             DateTime               @default(now())
@@ -233,9 +235,11 @@ model SaleItem {
   fishTypeId            String
   fishType              FishType               @relation(fields: [fishTypeId], references: [id])
   grade                 String                 @default("Grade A")
-  weightKg              Float
+  weightKg              Float // Gross Dispatched Quantity in kg
+  spoiledWeightKg       Float                  @default(0.0) // Spoiled / Delivery rejection quantity in kg
+  spoilageReason        String? // Reason for delivery rejection or transit loss
   unitPricePerKg        Float
-  totalPrice            Float
+  totalPrice            Float // (weightKg - spoiledWeightKg) * Rate per kg
   notes                 String?
   createdAt             DateTime               @default(now())
   inventoryTransactions InventoryTransaction[]

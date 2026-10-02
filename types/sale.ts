@@ -22,11 +22,24 @@ export interface SaleItemDetailDTO {
   fishTypeName: string;
   fishTypeCode: string;
   grade: string;
-  weightKg: number;
+  weightKg: number; // Dispatched weight
+  spoiledWeightKg?: number; // Spoiled / rejected weight
+  spoilageReason?: string | null;
+  effectiveWeightKg?: number; // weightKg - spoiledWeightKg
   unitPricePerKg: number;
   totalPrice: number;
   notes?: string | null;
   createdAt: string;
+}
+
+export interface UpdateSaleSpoilageItemInput {
+  itemId: string;
+  spoiledWeightKg: number;
+  spoilageReason?: string | null;
+}
+
+export interface UpdateSaleSpoilageInput {
+  items: UpdateSaleSpoilageItemInput[];
 }
 
 export interface CreateSaleInput {
