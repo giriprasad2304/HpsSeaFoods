@@ -27,6 +27,19 @@ export interface CostBreakdownDTO {
   totalCost: number;
 }
 
+export interface LinkedExpenseDTO {
+  id: string;
+  expenseNumber: string;
+  categoryName: string;
+  categoryCode?: string;
+  title: string;
+  amount: number;
+  paidTo?: string | null;
+  paymentMethod: string;
+  expenseDate: string;
+  notes?: string | null;
+}
+
 export interface PartyTransactionDTO {
   id: string;
   transactionNumber: string; // e.g., PUR-2026-001 or SAL-2026-001
@@ -41,6 +54,7 @@ export interface PartyTransactionDTO {
   paymentStatus: "UNPAID" | "PARTIAL" | "PAID" | "REFUNDED";
   paymentMethod?: string | null;
   items: FishItemDTO[];
+  expenses?: LinkedExpenseDTO[];
   notes?: string | null;
   metadata?: {
     harborLocation?: string | null;

@@ -30,6 +30,18 @@ export interface DashboardMetrics {
   // Inventory valuation
   inventoryValue: number;
   totalStockKg: number;
+
+  // Fish Spoilage / Wastage Loss
+  totalSpoilageLoss: number;
+  totalSpoiledWeightKg: number;
+  todaySpoilageLoss: number;
+  todaySpoiledWeightKg: number;
+  salesSpoilageLoss: number;
+  salesSpoiledWeightKg: number;
+  inventoryWastageLoss: number;
+  inventoryWastageWeightKg: number;
+  purchaseSpoilageLoss: number;
+  purchaseSpoiledWeightKg: number;
 }
 
 export interface MonthlyProfitLossPoint {

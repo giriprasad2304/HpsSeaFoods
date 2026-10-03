@@ -13,6 +13,7 @@ import {
   Package,
   RefreshCw,
   Radio,
+  AlertTriangle,
 } from "lucide-react";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { SalesChart } from "@/components/dashboard/sales-chart";
@@ -77,7 +78,17 @@ export function DashboardView({ initialData }: DashboardViewProps) {
       )
       .on(
         "postgres_changes",
+        { event: "*", schema: "public", table: "sale_items" },
+        () => triggerDebouncedRefresh()
+      )
+      .on(
+        "postgres_changes",
         { event: "*", schema: "public", table: "purchases" },
+        () => triggerDebouncedRefresh()
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "purchase_items" },
         () => triggerDebouncedRefresh()
       )
       .on(
@@ -161,9 +172,9 @@ export function DashboardView({ initialData }: DashboardViewProps) {
         </div>
       </div>
 
-      {/* 9 Metrics Grid (3x3 Layout with clear hierarchy) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {/* Row 1: Today's Operations & Live Valuation */}
+      {/* Metrics Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        {/* Row 1: Today's Operations, Live Valuation & Spoilage Loss */}
         <StatCard
           title="Today's Sales"
           value={formatCurrency(metrics.todaySalesAmount)}
@@ -186,6 +197,18 @@ export function DashboardView({ initialData }: DashboardViewProps) {
           subValue={`${formatWeight(metrics.totalStockKg)} in stock`}
           icon={Package}
           highlight="default"
+        />
+
+        <StatCard
+          title="Fish Spoilage Loss"
+          value={formatCurrency(metrics.totalSpoilageLoss)}
+          subValue={
+            metrics.todaySpoilageLoss > 0
+              ? `Today: ${formatCurrency(metrics.todaySpoilageLoss)} (${formatWeight(metrics.todaySpoiledWeightKg)})`
+              : `${formatWeight(metrics.totalSpoiledWeightKg)} spoiled & discarded`
+          }
+          icon={AlertTriangle}
+          highlight={metrics.totalSpoilageLoss > 0 ? "danger" : "default"}
         />
 
         {/* Row 2: Cumulative Profitability & Operating Financials */}
@@ -213,7 +236,6 @@ export function DashboardView({ initialData }: DashboardViewProps) {
           highlight={metrics.grossProfit >= 0 ? "success" : "danger"}
         />
 
-        {/* Row 3: Net Realized Profit & Outstanding Working Capital */}
         <StatCard
           title="Net Profit"
           value={formatCurrency(metrics.netProfit)}
@@ -222,12 +244,14 @@ export function DashboardView({ initialData }: DashboardViewProps) {
           highlight={metrics.netProfit >= 0 ? "success" : "danger"}
         />
 
+        {/* Row 3: Outstanding Balances */}
         <StatCard
           title="Outstanding Receivables"
           value={formatCurrency(metrics.outstandingReceivables)}
           subValue="Money customers owe you"
           icon={Building2}
           highlight={metrics.outstandingReceivables > 0 ? "warning" : "default"}
+          className="xl:col-span-2"
         />
 
         <StatCard
@@ -236,6 +260,7 @@ export function DashboardView({ initialData }: DashboardViewProps) {
           subValue="Money you owe to suppliers"
           icon={CreditCard}
           highlight={metrics.outstandingPayables > 0 ? "warning" : "default"}
+          className="xl:col-span-2"
         />
       </div>
 

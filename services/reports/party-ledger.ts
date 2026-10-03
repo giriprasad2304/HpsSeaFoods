@@ -226,6 +226,12 @@ export async function getCustomerLedger(customerId: string): Promise<PartyLedger
             },
           },
           packingCosts: true,
+          expenses: {
+            include: {
+              category: true,
+            },
+            orderBy: { expenseDate: "desc" },
+          },
           payments: true,
           invoice: true,
         },
@@ -285,6 +291,7 @@ export async function getCustomerLedger(customerId: string): Promise<PartyLedger
     let txThermocolCost = 0;
     let txPackingMaterialCost = 0;
     let txOxygenCost = 0;
+    let txOtherCost = 0;
     let boxesCount = 0;
     let costPerBox = 0;
 
@@ -299,6 +306,59 @@ export async function getCustomerLedger(customerId: string): Promise<PartyLedger
       if (pc.costPerBox > 0) costPerBox = pc.costPerBox;
     });
 
+    // Aggregate linked direct expenses attached to this sale
+    const linkedExpenses = (s.expenses || []).map((exp) => {
+      const catName = exp.category?.name?.toLowerCase() || "";
+      const catCode = exp.category?.code?.toLowerCase() || "";
+      const title = exp.title?.toLowerCase() || "";
+
+      if (catName.includes("ice") || catCode.includes("ice") || title.includes("ice")) {
+        txIceCost += exp.amount;
+      } else if (
+        catName.includes("transport") ||
+        catCode.includes("trans") ||
+        catName.includes("freight") ||
+        catName.includes("fuel") ||
+        title.includes("truck") ||
+        title.includes("transport") ||
+        title.includes("freight")
+      ) {
+        txTransportCost += exp.amount;
+      } else if (
+        catName.includes("labour") ||
+        catCode.includes("lab") ||
+        catName.includes("labor") ||
+        title.includes("labour") ||
+        title.includes("loading")
+      ) {
+        txLabourCost += exp.amount;
+      } else if (
+        catName.includes("pack") ||
+        catName.includes("thermocol") ||
+        catCode.includes("pack") ||
+        catCode.includes("box") ||
+        title.includes("thermocol") ||
+        title.includes("box")
+      ) {
+        txPackingMaterialCost += exp.amount;
+      } else {
+        txOtherCost += exp.amount;
+      }
+
+      return {
+        id: exp.id,
+        expenseNumber: exp.expenseNumber,
+        categoryName: exp.category?.name || "General Expense",
+        categoryCode: exp.category?.code,
+        title: exp.title,
+        amount: exp.amount,
+        paidTo: exp.paidTo,
+        paymentMethod: exp.paymentMethod,
+        expenseDate: exp.expenseDate.toISOString(),
+        notes: exp.notes,
+      };
+    });
+
     const txPackingTotal = txThermocolCost + txPackingMaterialCost;
 
     costBreakdown.rawFishCost += rawFishCost;
@@ -308,6 +368,7 @@ export async function getCustomerLedger(customerId: string): Promise<PartyLedger
     costBreakdown.thermocolBoxCost += txThermocolCost;
     costBreakdown.packingCost += txPackingTotal;
     costBreakdown.oxygenCost += txOxygenCost;
+    costBreakdown.otherCost += txOtherCost;
     costBreakdown.taxAmount += s.taxAmount;
     costBreakdown.discountAmount += s.discountAmount;
     costBreakdown.totalCost += s.totalAmount;
@@ -355,7 +416,7 @@ export async function getCustomerLedger(customerId: string): Promise<PartyLedger
       oxygenCost: txOxygenCost,
       taxAmount: s.taxAmount,
       discountAmount: s.discountAmount,
-      otherCost: 0,
+      otherCost: txOtherCost,
       totalCost: s.totalAmount,
     };
 
@@ -372,6 +433,7 @@ export async function getCustomerLedger(customerId: string): Promise<PartyLedger
       balanceAmount: s.balanceAmount,
       paymentStatus: s.paymentStatus,
       items,
+      expenses: linkedExpenses,
       notes: s.notes,
       metadata: {
         deliveryDate: s.deliveryDate ? s.deliveryDate.toISOString() : null,

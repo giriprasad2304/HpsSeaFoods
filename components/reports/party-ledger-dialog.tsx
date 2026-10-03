@@ -597,9 +597,76 @@ export function PartyLedgerDialog({
                                           </Table>
                                         </div>
 
+                                        {/* Linked Direct Order Expenses */}
+                                        {tx.expenses && tx.expenses.length > 0 && (
+                                          <div className="space-y-2 pt-2 border-t border-border/60">
+                                            <div className="flex items-center justify-between">
+                                              <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                                                <Receipt className="h-3.5 w-3.5 text-primary" />
+                                                Linked Order Expenses ({tx.expenses.length})
+                                              </span>
+                                              <span className="text-[11px] font-mono font-semibold text-primary">
+                                                Total Order Expenses: {formatCurrency(tx.expenses.reduce((s, e) => s + e.amount, 0))}
+                                              </span>
+                                            </div>
+
+                                            <div className="rounded-md border border-border/60 overflow-hidden bg-card">
+                                              <Table>
+                                                <TableHeader>
+                                                  <TableRow className="bg-muted/40 text-[10px]">
+                                                    <TableHead>Expense #</TableHead>
+                                                    <TableHead>Category</TableHead>
+                                                    <TableHead>Purpose / Description</TableHead>
+                                                    <TableHead>Paid To</TableHead>
+                                                    <TableHead>Payment Mode</TableHead>
+                                                    <TableHead>Date</TableHead>
+                                                    <TableHead className="text-right">Amount</TableHead>
+                                                  </TableRow>
+                                                </TableHeader>
+                                                <TableBody>
+                                                  {tx.expenses.map((exp) => (
+                                                    <TableRow key={exp.id} className="text-xs hover:bg-muted/30 transition-colors">
+                                                      <TableCell className="font-mono font-semibold text-foreground">
+                                                        {exp.expenseNumber}
+                                                      </TableCell>
+                                                      <TableCell>
+                                                        <Badge variant="outline" className="text-[10px]">
+                                                          {exp.categoryName}
+                                                        </Badge>
+                                                      </TableCell>
+                                                      <TableCell className="font-medium text-foreground">
+                                                        {exp.title}
+                                                        {exp.notes && (
+                                                          <span className="text-[10px] text-muted-foreground block truncate max-w-xs">
+                                                            {exp.notes}
+                                                          </span>
+                                                        )}
+                                                      </TableCell>
+                                                      <TableCell className="text-muted-foreground text-[11px]">
+                                                        {exp.paidTo || "-"}
+                                                      </TableCell>
+                                                      <TableCell>
+                                                        <Badge variant="secondary" className="text-[9px]">
+                                                          {exp.paymentMethod.replace(/_/g, " ")}
+                                                        </Badge>
+                                                      </TableCell>
+                                                      <TableCell className="font-mono text-muted-foreground text-[11px]">
+                                                        {formatDate(exp.expenseDate)}
+                                                      </TableCell>
+                                                      <TableCell className="text-right font-mono font-bold text-foreground">
+                                                        {formatCurrency(exp.amount)}
+                                                      </TableCell>
+                                                    </TableRow>
+                                                  ))}
+                                                </TableBody>
+                                              </Table>
+                                            </div>
+                                          </div>
+                                        )}
+
                                         {/* Cost Elements Breakdown */}
                                         <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px]">
-                                          <span className="text-muted-foreground font-medium">Specific Charges:</span>
+                                          <span className="text-muted-foreground font-medium">Specific Charges & Costs:</span>
                                           <span className="px-2 py-0.5 rounded bg-muted/60 text-muted-foreground">
                                             Raw Fish: <strong className="text-foreground">{formatCurrency(tx.costs.rawFishCost)}</strong>
                                           </span>
@@ -615,6 +682,11 @@ export function PartyLedgerDialog({
                                           {tx.costs.packingCost > 0 && (
                                             <span className="px-2 py-0.5 rounded bg-muted/60 text-muted-foreground">
                                               Packing: <strong className="text-indigo-600 dark:text-indigo-400">{formatCurrency(tx.costs.packingCost)}</strong>
+                                            </span>
+                                          )}
+                                          {tx.costs.otherCost > 0 && (
+                                            <span className="px-2 py-0.5 rounded bg-muted/60 text-muted-foreground">
+                                              Other Expenses: <strong className="text-rose-600 dark:text-rose-400">{formatCurrency(tx.costs.otherCost)}</strong>
                                             </span>
                                           )}
                                         </div>

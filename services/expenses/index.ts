@@ -11,28 +11,38 @@ export async function generateExpenseNumber(): Promise<string> {
   const currentYear = new Date().getFullYear();
   const prefix = `EXP-${currentYear}-`;
 
-  const latest = await prisma.expense.findFirst({
+  const existingExpenses = await prisma.expense.findMany({
     where: {
       expenseNumber: {
         startsWith: prefix,
       },
-    },
-    orderBy: {
-      expenseNumber: "desc",
     },
     select: {
       expenseNumber: true,
     },
   });
 
-  if (!latest) {
-    return `${prefix}0001`;
+  let maxSeq = 0;
+  for (const exp of existingExpenses) {
+    const parts = exp.expenseNumber.split("-");
+    if (parts.length >= 3) {
+      const seq = parseInt(parts[2], 10);
+      if (!isNaN(seq) && seq > maxSeq) {
+        maxSeq = seq;
+      }
+    }
   }
 
-  const parts = latest.expenseNumber.split("-");
-  const lastSeq = parseInt(parts[2], 10);
-  const nextSeq = isNaN(lastSeq) ? 1 : lastSeq + 1;
-  return `${prefix}${nextSeq.toString().padStart(4, "0")}`;
+  let nextSeq = maxSeq + 1;
+  let candidate = `${prefix}${nextSeq.toString().padStart(4, "0")}`;
+
+  // Double check candidate uniqueness
+  while (await prisma.expense.findUnique({ where: { expenseNumber: candidate } })) {
+    nextSeq++;
+    candidate = `${prefix}${nextSeq.toString().padStart(4, "0")}`;
+  }
+
+  return candidate;
 }
 
 /**
@@ -282,67 +292,88 @@ export async function getExpenseById(id: string): Promise<ExpenseDTO | null> {
  */
 export async function createExpense(data: ExpenseFormValues, userId?: string): Promise<ExpenseDTO> {
   const validated = expenseFormSchema.parse(data);
-  const expenseNumber = await generateExpenseNumber();
-
   const expenseDate = new Date(validated.expenseDate);
 
-  const created = await prisma.expense.create({
-    data: {
-      expenseNumber,
-      categoryId: validated.categoryId,
-      title: validated.title.trim(),
-      description: validated.description?.trim() || null,
-      amount: Number(validated.amount.toFixed(2)),
-      paidTo: validated.paidTo?.trim() || null,
-      paymentMethod: validated.paymentMethod as PaymentMethod,
-      expenseDate,
-      saleId: validated.saleId && validated.saleId !== "" ? validated.saleId : null,
-      invoiceUrl: validated.invoiceUrl || null,
-      invoiceFileName: validated.invoiceFileName || null,
-      receiptUrl: validated.invoiceUrl || null,
-      notes: validated.notes?.trim() || null,
-    },
-    include: {
-      category: true,
-      sale: {
-        include: { customer: true },
-      },
-    },
-  });
+  let attempts = 0;
+  const maxAttempts = 5;
 
-  await logAuditEvent({
-    action: "CREATE_EXPENSE",
-    entity: "EXPENSE",
-    entityId: created.id,
-    userId,
-    metadata: {
-      expenseNumber: created.expenseNumber,
-      amount: created.amount,
-      category: created.category.name,
-      saleId: created.saleId,
-    },
-  });
+  while (attempts < maxAttempts) {
+    attempts++;
+    const expenseNumber = await generateExpenseNumber();
 
-  return {
-    id: created.id,
-    expenseNumber: created.expenseNumber,
-    categoryId: created.categoryId,
-    categoryName: created.category.name,
-    categoryCode: created.category.code,
-    title: created.title,
-    description: created.description,
-    amount: created.amount,
-    paidTo: created.paidTo,
-    paymentMethod: created.paymentMethod,
-    expenseDate: created.expenseDate.toISOString(),
-    saleId: created.saleId,
-    saleNumber: created.sale?.saleNumber || null,
-    customerName: created.sale?.customer?.name || null,
-    receiptUrl: created.receiptUrl,
-    invoiceUrl: created.invoiceUrl,
-    invoiceFileName: created.invoiceFileName,
-    notes: created.notes,
-  };
+    try {
+      const created = await prisma.expense.create({
+        data: {
+          expenseNumber,
+          categoryId: validated.categoryId,
+          title: validated.title.trim(),
+          description: validated.description?.trim() || null,
+          amount: Number(validated.amount.toFixed(2)),
+          paidTo: validated.paidTo?.trim() || null,
+          paymentMethod: validated.paymentMethod as PaymentMethod,
+          expenseDate,
+          saleId: validated.saleId && validated.saleId !== "" ? validated.saleId : null,
+          invoiceUrl: validated.invoiceUrl || null,
+          invoiceFileName: validated.invoiceFileName || null,
+          receiptUrl: validated.invoiceUrl || null,
+          notes: validated.notes?.trim() || null,
+        },
+        include: {
+          category: true,
+          sale: {
+            include: { customer: true },
+          },
+        },
+      });
+
+      await logAuditEvent({
+        action: "CREATE_EXPENSE",
+        entity: "EXPENSE",
+        entityId: created.id,
+        userId,
+        metadata: {
+          expenseNumber: created.expenseNumber,
+          amount: created.amount,
+          category: created.category.name,
+          saleId: created.saleId,
+        },
+      });
+
+      return {
+        id: created.id,
+        expenseNumber: created.expenseNumber,
+        categoryId: created.categoryId,
+        categoryName: created.category.name,
+        categoryCode: created.category.code,
+        title: created.title,
+        description: created.description,
+        amount: created.amount,
+        paidTo: created.paidTo,
+        paymentMethod: created.paymentMethod,
+        expenseDate: created.expenseDate.toISOString(),
+        saleId: created.saleId,
+        saleNumber: created.sale?.saleNumber || null,
+        customerName: created.sale?.customer?.name || null,
+        receiptUrl: created.receiptUrl,
+        invoiceUrl: created.invoiceUrl,
+        invoiceFileName: created.invoiceFileName,
+        notes: created.notes,
+      };
+    } catch (err: unknown) {
+      if (
+        attempts < maxAttempts &&
+        typeof err === "object" &&
+        err !== null &&
+        "code" in err &&
+        (err as { code: string }).code === "P2002"
+      ) {
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  throw new Error("Failed to generate a unique expense number after multiple attempts.");
 }
 
 /**

@@ -42,6 +42,9 @@ export async function getDashboardData(): Promise<DashboardData> {
       monthlyPurchases,
       monthlyPacking,
       monthlyExpenses,
+      saleSpoilageItems,
+      purchaseSpoilageItems,
+      wastageTransactions,
     ] = await Promise.all([
       // 1. Today's Sales
       prisma.sale.aggregate({
@@ -178,11 +181,51 @@ export async function getDashboardData(): Promise<DashboardData> {
         },
         select: { expenseDate: true, amount: true },
       }),
+
+      // Spoilage: Sale items with spoiled/rejected weight
+      prisma.saleItem.findMany({
+        where: {
+          spoiledWeightKg: { gt: 0 },
+          sale: { status: { notIn: ["CANCELLED"] } },
+        },
+        select: {
+          spoiledWeightKg: true,
+          unitPricePerKg: true,
+          sale: { select: { saleDate: true } },
+        },
+      }),
+
+      // Spoilage: Purchase items with rejected/spoiled weight
+      prisma.purchaseItem.findMany({
+        where: {
+          spoiledWeightKg: { gt: 0 },
+          purchase: { status: { notIn: ["CANCELLED"] } },
+        },
+        select: {
+          spoiledWeightKg: true,
+          unitPricePerKg: true,
+          purchase: { select: { purchaseDate: true } },
+        },
+      }),
+
+      // Spoilage / Wastage: Cold storage & inventory wastage transactions
+      prisma.inventoryTransaction.findMany({
+        where: {
+          transactionType: "WASTAGE_OUTWARD",
+        },
+        select: {
+          quantityKg: true,
+          unitCost: true,
+          fishTypeId: true,
+          createdAt: true,
+        },
+      }),
     ]);
 
     // Calculate Inventory Value & Total Stock Kg
     let totalStockKg = 0;
     let inventoryValue = 0;
+    const fishAvgCostMap = new Map<string, number>();
 
     for (const fish of activeFishStock) {
       let currentStock = 0;
@@ -201,9 +244,82 @@ export async function getDashboardData(): Promise<DashboardData> {
 
       const safeStock = Math.max(0, currentStock);
       const avgCost = totalPurchasedKg > 0 ? totalPurchasedCost / totalPurchasedKg : 0;
+      fishAvgCostMap.set(fish.id, avgCost);
       totalStockKg += safeStock;
       inventoryValue += safeStock * avgCost;
     }
+
+    // ────────────────────────────────────────
+    // Calculate Fish Spoilage & Wastage Losses
+    // ────────────────────────────────────────
+    let salesSpoiledWeightKg = 0;
+    let salesSpoilageLoss = 0;
+    let todaySalesSpoiledWeightKg = 0;
+    let todaySalesSpoilageLoss = 0;
+
+    for (const item of saleSpoilageItems) {
+      const spoiledKg = item.spoiledWeightKg || 0;
+      const loss = spoiledKg * (item.unitPricePerKg || 0);
+      salesSpoiledWeightKg += spoiledKg;
+      salesSpoilageLoss += loss;
+
+      const saleDate = new Date(item.sale.saleDate);
+      if (saleDate >= todayStart && saleDate <= todayEnd) {
+        todaySalesSpoiledWeightKg += spoiledKg;
+        todaySalesSpoilageLoss += loss;
+      }
+    }
+
+    let purchaseSpoiledWeightKg = 0;
+    let purchaseSpoilageLoss = 0;
+    let todayPurchaseSpoiledWeightKg = 0;
+    let todayPurchaseSpoilageLoss = 0;
+
+    for (const item of purchaseSpoilageItems) {
+      const spoiledKg = item.spoiledWeightKg || 0;
+      const loss = spoiledKg * (item.unitPricePerKg || 0);
+      purchaseSpoiledWeightKg += spoiledKg;
+      purchaseSpoilageLoss += loss;
+
+      const purchaseDate = new Date(item.purchase.purchaseDate);
+      if (purchaseDate >= todayStart && purchaseDate <= todayEnd) {
+        todayPurchaseSpoiledWeightKg += spoiledKg;
+        todayPurchaseSpoilageLoss += loss;
+      }
+    }
+
+    let inventoryWastageWeightKg = 0;
+    let inventoryWastageLoss = 0;
+    let todayInventoryWastageWeightKg = 0;
+    let todayInventoryWastageLoss = 0;
+
+    for (const tx of wastageTransactions) {
+      const wKg = Math.abs(tx.quantityKg || 0);
+      const unitCost = tx.unitCost ?? fishAvgCostMap.get(tx.fishTypeId) ?? 0;
+      const loss = wKg * unitCost;
+
+      inventoryWastageWeightKg += wKg;
+      inventoryWastageLoss += loss;
+
+      const txDate = new Date(tx.createdAt);
+      if (txDate >= todayStart && txDate <= todayEnd) {
+        todayInventoryWastageWeightKg += wKg;
+        todayInventoryWastageLoss += loss;
+      }
+    }
+
+    const totalSpoilageLoss = Number(
+      (salesSpoilageLoss + inventoryWastageLoss + purchaseSpoilageLoss).toFixed(2)
+    );
+    const totalSpoiledWeightKg = Number(
+      (salesSpoiledWeightKg + inventoryWastageWeightKg + purchaseSpoiledWeightKg).toFixed(2)
+    );
+    const todaySpoilageLoss = Number(
+      (todaySalesSpoilageLoss + todayInventoryWastageLoss + todayPurchaseSpoilageLoss).toFixed(2)
+    );
+    const todaySpoiledWeightKg = Number(
+      (todaySalesSpoiledWeightKg + todayInventoryWastageWeightKg + todayPurchaseSpoiledWeightKg).toFixed(2)
+    );
 
     // Financial Metrics
     const totalRevenue = allSalesAgg._sum.totalAmount ?? 0;
@@ -233,6 +349,9 @@ export async function getDashboardData(): Promise<DashboardData> {
       todayPurchasesCount: todayPurchasesAgg._count.id,
       todayPurchasesWeightKg: Number((todayPurchasesAgg._sum.totalWeightKg ?? 0).toFixed(2)),
 
+      todaySpoilageLoss,
+      todaySpoiledWeightKg: Number(todaySpoiledWeightKg.toFixed(2)),
+
       totalRevenue: Number(totalRevenue.toFixed(2)),
       totalExpenses: Number(totalExpenses.toFixed(2)),
       totalCOGS: Number(totalCOGS.toFixed(2)),
@@ -246,6 +365,15 @@ export async function getDashboardData(): Promise<DashboardData> {
 
       inventoryValue: Number(inventoryValue.toFixed(2)),
       totalStockKg: Number(totalStockKg.toFixed(2)),
+
+      totalSpoilageLoss,
+      totalSpoiledWeightKg,
+      salesSpoilageLoss: Number(salesSpoilageLoss.toFixed(2)),
+      salesSpoiledWeightKg: Number(salesSpoiledWeightKg.toFixed(2)),
+      inventoryWastageLoss: Number(inventoryWastageLoss.toFixed(2)),
+      inventoryWastageWeightKg: Number(inventoryWastageWeightKg.toFixed(2)),
+      purchaseSpoilageLoss: Number(purchaseSpoilageLoss.toFixed(2)),
+      purchaseSpoiledWeightKg: Number(purchaseSpoiledWeightKg.toFixed(2)),
     };
 
     // ────────────────────────────────────────
@@ -371,6 +499,8 @@ export async function getDashboardData(): Promise<DashboardData> {
         todayPurchasesAmount: 0,
         todayPurchasesCount: 0,
         todayPurchasesWeightKg: 0,
+        todaySpoilageLoss: 0,
+        todaySpoiledWeightKg: 0,
         totalRevenue: 0,
         totalExpenses: 0,
         totalCOGS: 0,
@@ -382,6 +512,14 @@ export async function getDashboardData(): Promise<DashboardData> {
         outstandingPayables: 0,
         inventoryValue: 0,
         totalStockKg: 0,
+        totalSpoilageLoss: 0,
+        totalSpoiledWeightKg: 0,
+        salesSpoilageLoss: 0,
+        salesSpoiledWeightKg: 0,
+        inventoryWastageLoss: 0,
+        inventoryWastageWeightKg: 0,
+        purchaseSpoilageLoss: 0,
+        purchaseSpoiledWeightKg: 0,
       },
       monthlyProfitLoss: [],
       salesTrend: [],
