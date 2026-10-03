@@ -16,6 +16,8 @@ import {
   AlertCircle,
   FileText,
   ShoppingBag,
+  Plus,
+  CheckCircle2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +26,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { expenseFormSchema, type ExpenseFormValues } from "@/validations/expense.schema";
 import type { ExpenseCategoryDTO, ExpenseSaleLookupDTO } from "@/types";
 import { formatCurrency } from "@/lib/utils";
+import { AddCategoryDialog } from "./add-category-dialog";
 
 interface ExpenseFormProps {
   categories: ExpenseCategoryDTO[];
@@ -34,6 +37,10 @@ export function ExpenseForm({ categories, sales = [] }: ExpenseFormProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const preselectedSaleId = searchParams.get("saleId") || "";
+
+  const [categoryList, setCategoryList] = React.useState<ExpenseCategoryDTO[]>(categories);
+  const [showAddCategoryModal, setShowAddCategoryModal] = React.useState(false);
+  const [newlyCreatedCatName, setNewlyCreatedCatName] = React.useState<string | null>(null);
 
   const [loading, setLoading] = React.useState(false);
   const [uploading, setUploading] = React.useState(false);
@@ -53,6 +60,22 @@ export function ExpenseForm({ categories, sales = [] }: ExpenseFormProps) {
     invoiceFileName: "",
     notes: "",
   });
+
+  const handleCategoryCreated = (newCategory: ExpenseCategoryDTO) => {
+    setCategoryList((prev) => {
+      const exists = prev.some((c) => c.id === newCategory.id);
+      if (exists) return prev;
+      return [...prev, newCategory];
+    });
+    setFormData((prev) => ({
+      ...prev,
+      categoryId: newCategory.id,
+    }));
+    setNewlyCreatedCatName(newCategory.name);
+    setTimeout(() => {
+      setNewlyCreatedCatName(null);
+    }, 4000);
+  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -200,20 +223,46 @@ export function ExpenseForm({ categories, sales = [] }: ExpenseFormProps) {
 
             {/* Expense Category */}
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                <Tag className="h-4 w-4 text-muted-foreground" /> Expense Category <span className="text-destructive">*</span>
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                  <Tag className="h-4 w-4 text-muted-foreground" /> Expense Category <span className="text-destructive">*</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowAddCategoryModal(true)}
+                  className="text-[11px] font-semibold text-primary hover:text-primary/80 hover:underline flex items-center gap-1 focus:outline-none"
+                >
+                  <Plus className="h-3 w-3" /> Add Category
+                </button>
+              </div>
+
+              {newlyCreatedCatName && (
+                <div className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-md border border-emerald-500/20 animate-in fade-in duration-200">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  <span>Category &ldquo;{newlyCreatedCatName}&rdquo; added and selected</span>
+                </div>
+              )}
+
               <Select
                 value={formData.categoryId}
-                onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
+                onChange={(e) => {
+                  if (e.target.value === "__NEW_CATEGORY__") {
+                    setShowAddCategoryModal(true);
+                  } else {
+                    setFormData({ ...formData, categoryId: e.target.value });
+                  }
+                }}
                 required
                 className="h-9.5 text-xs sm:text-sm bg-background"
               >
-                {categories.map((cat) => (
+                {categoryList.map((cat) => (
                   <option key={cat.id} value={cat.id}>
                     {cat.name} {cat.description ? `(${cat.description})` : ""}
                   </option>
                 ))}
+                <option value="__NEW_CATEGORY__" className="font-semibold text-primary">
+                  + Add New Category...
+                </option>
               </Select>
             </div>
           </div>
@@ -425,6 +474,12 @@ export function ExpenseForm({ categories, sales = [] }: ExpenseFormProps) {
           )}
         </Button>
       </div>
+
+      <AddCategoryDialog
+        open={showAddCategoryModal}
+        onOpenChange={setShowAddCategoryModal}
+        onCategoryCreated={handleCategoryCreated}
+      />
     </form>
   );
 }

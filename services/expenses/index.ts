@@ -68,6 +68,50 @@ export async function getExpenseCategories(): Promise<ExpenseCategoryDTO[]> {
   }
 }
 
+/**
+ * Create a new expense category
+ */
+export async function createExpenseCategory(data: {
+  name: string;
+  code?: string;
+  description?: string;
+}): Promise<ExpenseCategoryDTO> {
+  const cleanedName = data.name.trim();
+  if (!cleanedName) {
+    throw new Error("Category name is required");
+  }
+
+  const baseCode = (
+    data.code?.trim() ||
+    `EXP-CAT-${cleanedName.replace(/[^a-zA-Z0-9]/g, "").slice(0, 5).toUpperCase()}`
+  ).toUpperCase();
+
+  let finalCode = baseCode;
+  const existingWithCode = await prisma.expenseCategory.findUnique({
+    where: { code: finalCode },
+  });
+  if (existingWithCode) {
+    finalCode = `${baseCode}-${Date.now().toString().slice(-4)}`;
+  }
+
+  const created = await prisma.expenseCategory.create({
+    data: {
+      code: finalCode,
+      name: cleanedName,
+      description: data.description?.trim() || null,
+      isActive: true,
+    },
+  });
+
+  return {
+    id: created.id,
+    code: created.code,
+    name: created.name,
+    description: created.description,
+    isActive: created.isActive,
+  };
+}
+
 import { buildPrismaDateFilter } from "@/lib/filter-utils";
 
 /**
