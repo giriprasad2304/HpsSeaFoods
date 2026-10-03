@@ -18,7 +18,17 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, code, category, grade, scientificName, description } = body;
+    const {
+      name,
+      code,
+      category,
+      grade,
+      scientificName,
+      description,
+      initialStockKg,
+      initialCostPerKg,
+      storageLocation,
+    } = body;
 
     if (!name || typeof name !== "string" || name.trim().length === 0) {
       return NextResponse.json({ error: "Fish species name is required" }, { status: 400 });
@@ -31,6 +41,9 @@ export async function POST(request: NextRequest) {
       grade,
       scientificName,
       description,
+      initialStockKg: typeof initialStockKg === "number" ? initialStockKg : initialStockKg ? parseFloat(initialStockKg) : undefined,
+      initialCostPerKg: typeof initialCostPerKg === "number" ? initialCostPerKg : initialCostPerKg ? parseFloat(initialCostPerKg) : undefined,
+      storageLocation,
     });
 
     return NextResponse.json({

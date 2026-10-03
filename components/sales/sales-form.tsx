@@ -17,6 +17,7 @@ import {
   Phone,
   Mail,
   MapPin,
+  Fish,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +25,7 @@ import { Select } from "@/components/ui/select";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { AddSpeciesDialog } from "@/components/inventory/add-species-dialog";
 import { formatCurrency, formatWeight } from "@/lib/utils";
 import { DELIVERY_STATUSES } from "@/constants";
 import type {
@@ -31,6 +33,8 @@ import type {
   FishTypeWithStockDTO,
   CreateSaleInput,
   SaleItemInput,
+  InventoryStockSummaryDTO,
+  FishTypeDTO,
 } from "@/types";
 
 interface SalesFormProps {
@@ -108,6 +112,39 @@ export function SalesForm({ customers, fishTypes }: SalesFormProps) {
     creditLimit: 50000,
     paymentTermsDays: 15,
   });
+
+  // Quick Add Species Dialog State
+  const [showAddSpecies, setShowAddSpecies] = React.useState(false);
+  const [targetSpeciesRowIndex, setTargetSpeciesRowIndex] = React.useState<number | null>(null);
+
+  const handleSpeciesCreated = (created: InventoryStockSummaryDTO & FishTypeDTO) => {
+    const formatted: FishTypeWithStockDTO = {
+      id: created.fishTypeId || created.id,
+      code: created.code,
+      name: created.name,
+      scientificName: created.scientificName,
+      category: created.category,
+      grade: created.grade || "Grade A",
+      description: created.description,
+      imageUrl: created.imageUrl,
+      isActive: created.isActive ?? true,
+      availableStockKg: created.currentStockKg || 0,
+    };
+
+    setFishTypeList((prev) => {
+      const exists = prev.some((p) => p.id === formatted.id);
+      if (exists) return prev;
+      return [formatted, ...prev];
+    });
+
+    if (targetSpeciesRowIndex !== null && targetSpeciesRowIndex >= 0) {
+      updateItem(targetSpeciesRowIndex, "fishTypeId", formatted.id);
+      if (created.grade) {
+        updateItem(targetSpeciesRowIndex, "grade", created.grade);
+      }
+    }
+    setTargetSpeciesRowIndex(null);
+  };
 
   // Form state
   const [customerId, setCustomerId] = React.useState("");
@@ -477,16 +514,31 @@ export function SalesForm({ customers, fishTypes }: SalesFormProps) {
                 <CardTitle className="text-sm">
                   Fish Varieties & Quantities ({items.length})
                 </CardTitle>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={addItem}
-                  className="gap-1 text-xs"
-                >
-                  <Plus className="h-3 w-3" />
-                  Add Variety
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setTargetSpeciesRowIndex(null);
+                      setShowAddSpecies(true);
+                    }}
+                    className="gap-1 text-xs text-primary hover:text-primary hover:bg-primary/10"
+                  >
+                    <Fish className="h-3 w-3" />
+                    + New Species
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={addItem}
+                    className="gap-1 text-xs"
+                  >
+                    <Plus className="h-3 w-3" />
+                    Add Variety
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -539,9 +591,21 @@ export function SalesForm({ customers, fishTypes }: SalesFormProps) {
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div className="sm:col-span-2 space-y-1">
-                        <label className="text-[11px] font-medium text-muted-foreground">
-                          Fish Species *
-                        </label>
+                        <div className="flex items-center justify-between">
+                          <label className="text-[11px] font-medium text-muted-foreground">
+                            Fish Species *
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setTargetSpeciesRowIndex(index);
+                              setShowAddSpecies(true);
+                            }}
+                            className="text-[10px] text-primary hover:underline font-medium flex items-center gap-0.5 cursor-pointer"
+                          >
+                            <Plus className="h-2.5 w-2.5" /> New Species
+                          </button>
+                        </div>
                         <Select
                           value={item.fishTypeId}
                           onChange={(e) =>
@@ -1025,6 +1089,13 @@ export function SalesForm({ customers, fishTypes }: SalesFormProps) {
           </DialogFooter>
         </form>
       </Dialog>
+
+      {/* Quick Add Fish Species Dialog */}
+      <AddSpeciesDialog
+        open={showAddSpecies}
+        onOpenChange={setShowAddSpecies}
+        onSuccess={handleSpeciesCreated}
+      />
     </form>
   );
 }

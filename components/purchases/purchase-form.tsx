@@ -15,6 +15,7 @@ import {
   Loader2,
   Upload,
   X,
+  Fish,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +23,7 @@ import { Select } from "@/components/ui/select";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { AddSpeciesDialog } from "@/components/inventory/add-species-dialog";
 import { formatCurrency, formatWeight } from "@/lib/utils";
 import type {
   SupplierDTO,
@@ -98,6 +100,26 @@ export function PurchaseForm({ suppliers, fishTypes }: PurchaseFormProps) {
     taxNumber: "",
     address: "",
   });
+
+  // Quick Add Species Dialog State
+  const [showAddSpecies, setShowAddSpecies] = React.useState(false);
+  const [targetSpeciesRowIndex, setTargetSpeciesRowIndex] = React.useState<number | null>(null);
+
+  const handleSpeciesCreated = (created: FishTypeDTO) => {
+    setFishTypeList((prev) => {
+      const exists = prev.some((p) => p.id === (created.id || created.code));
+      if (exists) return prev;
+      return [created, ...prev];
+    });
+
+    if (targetSpeciesRowIndex !== null && targetSpeciesRowIndex >= 0) {
+      updateItem(targetSpeciesRowIndex, "fishTypeId", created.id);
+      if (created.grade) {
+        updateItem(targetSpeciesRowIndex, "grade", created.grade);
+      }
+    }
+    setTargetSpeciesRowIndex(null);
+  };
 
   // Form state
   const [supplierId, setSupplierId] = React.useState("");
@@ -456,16 +478,31 @@ export function PurchaseForm({ suppliers, fishTypes }: PurchaseFormProps) {
                 <CardTitle className="text-sm">
                   Fish Items ({items.length})
                 </CardTitle>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={addItem}
-                  className="gap-1 text-xs"
-                >
-                  <Plus className="h-3 w-3" />
-                  Add Item
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setTargetSpeciesRowIndex(null);
+                      setShowAddSpecies(true);
+                    }}
+                    className="gap-1 text-xs text-primary hover:text-primary hover:bg-primary/10"
+                  >
+                    <Fish className="h-3 w-3" />
+                    + New Species
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={addItem}
+                    className="gap-1 text-xs"
+                  >
+                    <Plus className="h-3 w-3" />
+                    Add Item
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -502,9 +539,21 @@ export function PurchaseForm({ suppliers, fishTypes }: PurchaseFormProps) {
 
                   <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                     <div className="sm:col-span-2 space-y-1">
-                      <label className="text-[11px] font-medium text-muted-foreground">
-                        Fish Type *
-                      </label>
+                      <div className="flex items-center justify-between">
+                        <label className="text-[11px] font-medium text-muted-foreground">
+                          Fish Type *
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTargetSpeciesRowIndex(index);
+                            setShowAddSpecies(true);
+                          }}
+                          className="text-[10px] text-primary hover:underline font-medium flex items-center gap-0.5 cursor-pointer"
+                        >
+                          <Plus className="h-2.5 w-2.5" /> New Species
+                        </button>
+                      </div>
                       <Select
                         value={item.fishTypeId}
                         onChange={(e) =>
@@ -1041,6 +1090,13 @@ export function PurchaseForm({ suppliers, fishTypes }: PurchaseFormProps) {
           </DialogFooter>
         </form>
       </Dialog>
+
+      {/* Quick Add Fish Species Dialog */}
+      <AddSpeciesDialog
+        open={showAddSpecies}
+        onOpenChange={setShowAddSpecies}
+        onSuccess={handleSpeciesCreated}
+      />
     </form>
   );
 }

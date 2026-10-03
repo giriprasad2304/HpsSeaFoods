@@ -20,8 +20,9 @@ import { DataFilterBar } from "@/components/ui/data-filter-bar";
 import { useUrlFilters } from "@/hooks/use-url-filters";
 import { InventoryHeader } from "./inventory-header";
 import { StockAdjustmentDialog } from "./stock-adjustment-dialog";
+import { AddSpeciesDialog } from "./add-species-dialog";
 import { SlidersHorizontal } from "lucide-react";
-import type { InventoryStockSummaryDTO } from "@/types";
+import type { InventoryStockSummaryDTO, FishTypeDTO } from "@/types";
 
 interface InventoryFiltersState {
   search: string;
@@ -45,6 +46,7 @@ export function InventoryListView({ initialItems }: InventoryListViewProps) {
   const router = useRouter();
   const [items, setItems] = React.useState<InventoryStockSummaryDTO[]>(initialItems);
   const [isAdjustmentOpen, setIsAdjustmentOpen] = React.useState(false);
+  const [isAddSpeciesOpen, setIsAddSpeciesOpen] = React.useState(false);
   const [selectedFishTypeId, setSelectedFishTypeId] = React.useState<string>("");
 
   React.useEffect(() => {
@@ -126,6 +128,28 @@ export function InventoryListView({ initialItems }: InventoryListViewProps) {
     router.refresh();
   };
 
+  const handleSpeciesAdded = (created: InventoryStockSummaryDTO & FishTypeDTO) => {
+    setItems((prev) => {
+      const exists = prev.some((p) => p.fishTypeId === (created.fishTypeId || created.id));
+      if (exists) return prev;
+      const newItem: InventoryStockSummaryDTO = {
+        fishTypeId: created.fishTypeId || created.id,
+        code: created.code,
+        name: created.name,
+        category: created.category,
+        grade: created.grade || "Grade A Standard",
+        currentStockKg: created.currentStockKg || 0,
+        totalPurchasedKg: created.totalPurchasedKg || 0,
+        totalSoldKg: 0,
+        totalWastageKg: 0,
+        averageCostPerKg: created.averageCostPerKg || 0,
+        stockStatus: created.stockStatus || "DEPLETED",
+      };
+      return [newItem, ...prev];
+    });
+    router.refresh();
+  };
+
   const handleExportStockReport = () => {
     const headers = [
       "Code",
@@ -168,6 +192,7 @@ export function InventoryListView({ initialItems }: InventoryListViewProps) {
       {/* Header with Functional Actions */}
       <InventoryHeader
         onAddStock={() => handleOpenAdjustment()}
+        onAddSpecies={() => setIsAddSpeciesOpen(true)}
         onExportReport={handleExportStockReport}
       />
 
@@ -338,6 +363,13 @@ export function InventoryListView({ initialItems }: InventoryListViewProps) {
         items={items}
         selectedFishTypeId={selectedFishTypeId}
         onSuccess={handleAdjustmentSuccess}
+      />
+
+      {/* Add Fish Species Dialog */}
+      <AddSpeciesDialog
+        open={isAddSpeciesOpen}
+        onOpenChange={setIsAddSpeciesOpen}
+        onSuccess={handleSpeciesAdded}
       />
     </div>
   );

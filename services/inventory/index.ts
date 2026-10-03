@@ -173,6 +173,9 @@ export async function createFishType(data: {
   grade?: string;
   scientificName?: string;
   description?: string;
+  initialStockKg?: number;
+  initialCostPerKg?: number;
+  storageLocation?: string;
 }) {
   const cleanedName = data.name.trim();
   const baseCode = (data.code?.trim() || `FISH-${cleanedName.replace(/[^a-zA-Z0-9]/g, "").slice(0, 3).toUpperCase()}`).toUpperCase();
@@ -196,6 +199,30 @@ export async function createFishType(data: {
     },
   });
 
+  const initialStock = data.initialStockKg && data.initialStockKg > 0 ? data.initialStockKg : 0;
+  const initialCost = data.initialCostPerKg && data.initialCostPerKg > 0 ? data.initialCostPerKg : 0;
+
+  if (initialStock > 0) {
+    await prisma.inventoryTransaction.create({
+      data: {
+        fishTypeId: created.id,
+        transactionType: "ADJUSTMENT_INWARD",
+        quantityKg: initialStock,
+        unitCost: initialCost > 0 ? initialCost : undefined,
+        batchLotNumber: `INIT-${Date.now().toString().slice(-6)}`,
+        storageLocation: data.storageLocation?.trim() || "Cold Storage A",
+        notes: `Initial opening stock recorded for ${created.name}`,
+      },
+    });
+  }
+
+  const stockStatus =
+    initialStock <= 0
+      ? "DEPLETED"
+      : initialStock < 500
+      ? "LOW_STOCK"
+      : "IN_STOCK";
+
   return {
     id: created.id,
     fishTypeId: created.id,
@@ -203,12 +230,15 @@ export async function createFishType(data: {
     name: created.name,
     category: created.category,
     grade: created.grade || "Grade A",
-    currentStockKg: 0,
-    totalPurchasedKg: 0,
+    scientificName: created.scientificName,
+    description: created.description,
+    isActive: created.isActive,
+    currentStockKg: initialStock,
+    totalPurchasedKg: initialStock,
     totalSoldKg: 0,
     totalWastageKg: 0,
-    averageCostPerKg: 0,
-    stockStatus: "OUT_OF_STOCK" as const,
+    averageCostPerKg: initialCost,
+    stockStatus,
   };
 }
 
