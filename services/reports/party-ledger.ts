@@ -316,6 +316,7 @@ export async function getCustomerLedger(customerId: string): Promise<PartyLedger
         txIceCost += exp.amount;
       } else if (
         catName.includes("transport") ||
+        catCode.includes("trn") ||
         catCode.includes("trans") ||
         catName.includes("freight") ||
         catName.includes("fuel") ||
@@ -329,16 +330,23 @@ export async function getCustomerLedger(customerId: string): Promise<PartyLedger
         catCode.includes("lab") ||
         catName.includes("labor") ||
         title.includes("labour") ||
-        title.includes("loading")
+        title.includes("loading") ||
+        title.includes("unloading")
       ) {
         txLabourCost += exp.amount;
       } else if (
-        catName.includes("pack") ||
+        catName.includes("box") ||
         catName.includes("thermocol") ||
-        catCode.includes("pack") ||
         catCode.includes("box") ||
         title.includes("thermocol") ||
         title.includes("box")
+      ) {
+        txThermocolCost += exp.amount;
+      } else if (
+        catName.includes("pack") ||
+        catCode.includes("pkg") ||
+        catCode.includes("pack") ||
+        title.includes("packing")
       ) {
         txPackingMaterialCost += exp.amount;
       } else {
@@ -372,6 +380,7 @@ export async function getCustomerLedger(customerId: string): Promise<PartyLedger
     costBreakdown.taxAmount += s.taxAmount;
     costBreakdown.discountAmount += s.discountAmount;
     costBreakdown.totalCost += s.totalAmount;
+
 
     totalWeightKg += saleWeight;
     totalBilledAmount += s.totalAmount;
@@ -494,7 +503,7 @@ export async function getCustomerLedger(customerId: string): Promise<PartyLedger
         oxygenCost: Number(costBreakdown.oxygenCost.toFixed(2)),
         taxAmount: Number(costBreakdown.taxAmount.toFixed(2)),
         discountAmount: Number(costBreakdown.discountAmount.toFixed(2)),
-        otherCost: 0,
+        otherCost: Number(costBreakdown.otherCost.toFixed(2)),
         totalCost: Number(costBreakdown.totalCost.toFixed(2)),
       },
     },

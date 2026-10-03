@@ -55,7 +55,25 @@ export async function getExpenseCategories(): Promise<ExpenseCategoryDTO[]> {
       orderBy: { name: "asc" },
     });
 
-    return categories.map((c) => ({
+    const priorityOrder = [
+      "EXP-CAT-ICE",
+      "EXP-CAT-TRN",
+      "EXP-CAT-LAB",
+      "EXP-CAT-BOX",
+      "EXP-CAT-OTH",
+      "EXP-CAT-MSC",
+    ];
+
+    const sorted = [...categories].sort((a, b) => {
+      const idxA = priorityOrder.indexOf(a.code);
+      const idxB = priorityOrder.indexOf(b.code);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return a.name.localeCompare(b.name);
+    });
+
+    return sorted.map((c) => ({
       id: c.id,
       code: c.code,
       name: c.name,
@@ -67,6 +85,7 @@ export async function getExpenseCategories(): Promise<ExpenseCategoryDTO[]> {
     return [];
   }
 }
+
 
 /**
  * Create a new expense category

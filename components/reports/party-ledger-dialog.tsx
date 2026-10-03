@@ -319,7 +319,7 @@ export function PartyLedgerDialog({
                   </span>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 text-xs">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2 text-xs">
                   <div className="p-2 rounded bg-card border border-border/60">
                     <span className="text-[10px] text-muted-foreground block">Raw Fish Cost</span>
                     <span className="font-mono font-bold text-foreground">
@@ -349,9 +349,16 @@ export function PartyLedgerDialog({
                   </div>
 
                   <div className="p-2 rounded bg-card border border-border/60">
-                    <span className="text-[10px] text-muted-foreground block">Packing / Boxes</span>
+                    <span className="text-[10px] text-muted-foreground block">Thermocol Boxes</span>
                     <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">
-                      {formatCurrency(summary.costBreakdown.packingCost + summary.costBreakdown.thermocolBoxCost)}
+                      {formatCurrency(summary.costBreakdown.thermocolBoxCost > 0 ? summary.costBreakdown.thermocolBoxCost : summary.costBreakdown.packingCost)}
+                    </span>
+                  </div>
+
+                  <div className="p-2 rounded bg-card border border-border/60">
+                    <span className="text-[10px] text-muted-foreground block">Other Expenses</span>
+                    <span className="font-mono font-bold text-teal-600 dark:text-teal-400">
+                      {formatCurrency(summary.costBreakdown.otherCost || 0)}
                     </span>
                   </div>
 

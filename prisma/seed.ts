@@ -121,24 +121,31 @@ async function main() {
   // ═══════════════════════════════════════════════════════════════
   console.log("  Creating expense categories...");
   const expenseCatsData = [
-    { code: "EXP-CAT-BOX", name: "Thermocol Boxes",    description: "Insulated thermocol packaging boxes" },
-    { code: "EXP-CAT-ICE", name: "Ice",                description: "Tube ice, crushed ice & dry ice" },
-    { code: "EXP-CAT-PKG", name: "Packing Materials",  description: "Polythene liners, sealing tape & gel packs" },
-    { code: "EXP-CAT-LAB", name: "Labour",             description: "Harbor unloading, grading & loading labour" },
-    { code: "EXP-CAT-TRN", name: "Transport",          description: "Reefer truck freight & local transport" },
-    { code: "EXP-CAT-ELC", name: "Electricity",        description: "Monthly electricity & generator fuel" },
-    { code: "EXP-CAT-CLD", name: "Cold Storage",       description: "Cold storage rental & maintenance" },
-    { code: "EXP-CAT-MNT", name: "Maintenance",        description: "Equipment maintenance & repairs" },
-    { code: "EXP-CAT-FUL", name: "Fuel",               description: "Vehicle fuel & diesel for generators" },
-    { code: "EXP-CAT-MSC", name: "Miscellaneous",      description: "Sundry expenses, stationery & misc" },
+    { code: "EXP-CAT-ICE", name: "Ice Cost",              description: "Tube ice, crushed ice & dry ice" },
+    { code: "EXP-CAT-TRN", name: "Transport Cost",        description: "Reefer truck freight & local transport" },
+    { code: "EXP-CAT-LAB", name: "Labour Cost",           description: "Harbor unloading, grading & loading labour" },
+    { code: "EXP-CAT-BOX", name: "Thermocol Boxes Cost",  description: "Insulated thermocol packaging boxes" },
+    { code: "EXP-CAT-OTH", name: "Others",                description: "General other operational expenses" },
+    { code: "EXP-CAT-PKG", name: "Packing Materials",     description: "Polythene liners, sealing tape & gel packs" },
+    { code: "EXP-CAT-ELC", name: "Electricity",           description: "Monthly electricity & generator fuel" },
+    { code: "EXP-CAT-CLD", name: "Cold Storage",          description: "Cold storage rental & maintenance" },
+    { code: "EXP-CAT-MNT", name: "Maintenance",           description: "Equipment maintenance & repairs" },
+    { code: "EXP-CAT-FUL", name: "Fuel",                  description: "Vehicle fuel & diesel for generators" },
   ];
 
   const expCatMap: Record<string, string> = {};
   for (const ec of expenseCatsData) {
     const created = await prisma.expenseCategory.create({ data: ec });
     expCatMap[ec.name] = created.id;
+    expCatMap[ec.code] = created.id;
+    if (ec.name === "Ice Cost") expCatMap["Ice"] = created.id;
+    if (ec.name === "Transport Cost") expCatMap["Transport"] = created.id;
+    if (ec.name === "Labour Cost") expCatMap["Labour"] = created.id;
+    if (ec.name === "Thermocol Boxes Cost") expCatMap["Thermocol Boxes"] = created.id;
+    if (ec.name === "Others") expCatMap["Miscellaneous"] = created.id;
   }
   console.log(`  ✓ ${expenseCatsData.length} expense categories created\n`);
+
 
   // ═══════════════════════════════════════════════════════════════
   // 6. PURCHASES (35 records)
