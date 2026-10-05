@@ -49,6 +49,7 @@ const EMPTY_ITEM: SaleItemInput = {
   grade: "Grade A",
   weightKg: 0,
   unitPricePerKg: 0,
+  exactPurchasingCost: null,
   notes: null,
 };
 
@@ -178,6 +179,7 @@ export function SalesForm({ customers, fishTypes, initialData }: SalesFormProps)
           grade: item.grade || "Grade A",
           weightKg: item.weightKg,
           unitPricePerKg: item.unitPricePerKg,
+          exactPurchasingCost: item.exactPurchasingCost ?? null,
           notes: item.notes ?? null,
         }))
       : [{ ...EMPTY_ITEM }]
@@ -200,11 +202,20 @@ export function SalesForm({ customers, fishTypes, initialData }: SalesFormProps)
       availableStock += originalAllocated;
     }
     const isOverStock = Boolean(item.fishTypeId && item.weightKg > availableStock);
+    const sellingRate = Number(item.unitPricePerKg) || 0;
+    const costRate =
+      item.exactPurchasingCost !== null && item.exactPurchasingCost !== undefined
+        ? Number(item.exactPurchasingCost)
+        : null;
+    const marginPerKg = costRate !== null ? sellingRate - costRate : null;
+
     return {
       ...item,
       totalPrice: Number((item.weightKg * item.unitPricePerKg).toFixed(2)),
       availableStock,
       isOverStock,
+      costRate,
+      marginPerKg,
     };
   });
 
@@ -604,6 +615,19 @@ export function SalesForm({ customers, fishTypes, initialData }: SalesFormProps)
                             In Stock: {formatWeight(calculated.availableStock)}
                           </Badge>
                         )}
+                        {calculated.costRate !== null && calculated.costRate > 0 && item.unitPricePerKg > 0 && (
+                          <Badge
+                            variant="outline"
+                            className={`text-[10px] font-mono font-medium ${
+                              (calculated.marginPerKg ?? 0) >= 0
+                                ? "text-emerald-700 dark:text-emerald-400 border-emerald-500/30 bg-emerald-500/10"
+                                : "text-amber-700 dark:text-amber-400 border-amber-500/30 bg-amber-500/10"
+                            }`}
+                          >
+                            Margin: {(calculated.marginPerKg ?? 0) >= 0 ? "+" : ""}
+                            {formatCurrency(calculated.marginPerKg ?? 0)}/kg
+                          </Badge>
+                        )}
                       </div>
                       <div className="flex items-center gap-3">
                         {item.fishTypeId &&
@@ -680,7 +704,7 @@ export function SalesForm({ customers, fishTypes, initialData }: SalesFormProps)
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                       <div className="space-y-1">
                         <div className="flex justify-between items-center">
                           <label className="text-[11px] font-medium text-muted-foreground">
@@ -710,6 +734,28 @@ export function SalesForm({ customers, fishTypes, initialData }: SalesFormProps)
                               ? "border-destructive focus-visible:ring-destructive"
                               : ""
                           }`}
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-medium text-blue-600 dark:text-blue-400 flex items-center justify-between">
+                          <span>Exact Cost / kg</span>
+                          <span className="text-[10px] text-muted-foreground">Purchased</span>
+                        </label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={item.exactPurchasingCost ?? ""}
+                          onChange={(e) =>
+                            updateItem(
+                              index,
+                              "exactPurchasingCost",
+                              e.target.value ? parseFloat(e.target.value) : null
+                            )
+                          }
+                          placeholder="₹ 0.00"
+                          className="h-8 text-xs font-mono border-blue-500/30 focus-visible:ring-blue-500"
                         />
                       </div>
 

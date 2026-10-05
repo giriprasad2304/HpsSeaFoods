@@ -6,6 +6,12 @@ export const purchaseItemSchema = z.object({
   weightKg: z
     .number({ invalid_type_error: "Quantity must be a valid number" })
     .positive("Quantity in kg must be greater than 0"),
+  freeWeightKg: z
+    .number({ invalid_type_error: "Free quantity must be a valid number" })
+    .nonnegative("Free quantity cannot be negative")
+    .default(0)
+    .optional()
+    .nullable(),
   unitPricePerKg: z
     .number({ invalid_type_error: "Rate must be a valid number" })
     .positive("Rate per kg must be greater than 0"),

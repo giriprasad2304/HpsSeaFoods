@@ -10,6 +10,7 @@ export interface SaleItemInput {
   fishTypeId: string;
   grade?: string;
   weightKg: number; // Quantity in kg
+  exactPurchasingCost?: number | null; // Exact purchasing cost per kg
   unitPricePerKg: number; // Selling rate per kg
   totalPrice?: number; // Calculated: Quantity * Selling Price/kg
   notes?: string | null;
@@ -26,6 +27,7 @@ export interface SaleItemDetailDTO {
   spoiledWeightKg?: number; // Spoiled / rejected weight
   spoilageReason?: string | null;
   effectiveWeightKg?: number; // weightKg - spoiledWeightKg
+  exactPurchasingCost?: number | null; // Exact purchasing cost per kg
   unitPricePerKg: number;
   totalPrice: number;
   notes?: string | null;

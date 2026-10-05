@@ -532,7 +532,9 @@ export function PurchaseDetails({ purchase }: PurchaseDetailsProps) {
                         <Thermometer className="h-3 w-3 inline mr-1" />
                         Temp °C
                       </TableHead>
-                      <TableHead className="text-right">Landed (kg)</TableHead>
+                      <TableHead className="text-right">Billed (kg)</TableHead>
+                      <TableHead className="text-right text-emerald-600 dark:text-emerald-400">Free (kg)</TableHead>
+                      <TableHead className="text-right">Total Intake</TableHead>
                       <TableHead className="text-center">Spoiled / Rejected</TableHead>
                       <TableHead className="text-right">Payable (kg)</TableHead>
                       <TableHead className="text-right">Rate/kg</TableHead>
@@ -542,6 +544,8 @@ export function PurchaseDetails({ purchase }: PurchaseDetailsProps) {
                   <TableBody>
                     {purchase.items.map((item) => {
                       const spoiledKg = item.spoiledWeightKg ?? 0;
+                      const freeKg = item.freeWeightKg ?? 0;
+                      const intakeKg = item.totalIntakeWeightKg ?? (item.weightKg + freeKg);
                       const effectiveKg =
                         item.effectiveWeightKg ??
                         Math.max(0, item.weightKg - spoiledKg);
@@ -570,6 +574,12 @@ export function PurchaseDetails({ purchase }: PurchaseDetailsProps) {
                           </TableCell>
                           <TableCell className="text-right text-xs font-mono font-medium">
                             {formatWeight(item.weightKg)}
+                          </TableCell>
+                          <TableCell className="text-right text-xs font-mono font-medium text-emerald-600 dark:text-emerald-400">
+                            {freeKg > 0 ? `+${formatWeight(freeKg)}` : "—"}
+                          </TableCell>
+                          <TableCell className="text-right text-xs font-mono font-semibold text-foreground">
+                            {formatWeight(intakeKg)}
                           </TableCell>
                           <TableCell className="text-center text-xs">
                             {spoiledKg > 0 ? (

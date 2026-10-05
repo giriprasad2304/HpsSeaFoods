@@ -43,6 +43,7 @@ const EMPTY_ITEM: PurchaseItemInput = {
   fishTypeId: "",
   grade: "Grade A",
   weightKg: 0,
+  freeWeightKg: 0,
   unitPricePerKg: 0,
   temperatureC: null,
   notes: null,
@@ -157,6 +158,7 @@ export function PurchaseForm({ suppliers, fishTypes, initialData }: PurchaseForm
           fishTypeId: item.fishTypeId,
           grade: item.grade || "Grade A",
           weightKg: item.weightKg,
+          freeWeightKg: item.freeWeightKg ?? 0,
           unitPricePerKg: item.unitPricePerKg,
           temperatureC: item.temperatureC ?? null,
           notes: item.notes ?? null,
@@ -175,15 +177,28 @@ export function PurchaseForm({ suppliers, fishTypes, initialData }: PurchaseForm
   );
 
   // Calculations
-  const calculatedItems = items.map((item) => ({
-    ...item,
-    totalCost: Number((item.weightKg * item.unitPricePerKg).toFixed(2)),
-  }));
+  const calculatedItems = items.map((item) => {
+    const billedKg = Number(item.weightKg) || 0;
+    const freeKg = Number(item.freeWeightKg) || 0;
+    const totalIntakeKg = Number((billedKg + freeKg).toFixed(2));
+    return {
+      ...item,
+      billedKg,
+      freeWeightKg: freeKg,
+      totalIntakeKg,
+      totalCost: Number((billedKg * (Number(item.unitPricePerKg) || 0)).toFixed(2)),
+    };
+  });
 
-  const totalWeightKg = calculatedItems.reduce(
-    (sum, item) => sum + item.weightKg,
+  const totalBilledWeightKg = calculatedItems.reduce(
+    (sum, item) => sum + item.billedKg,
     0
   );
+  const totalFreeWeightKg = calculatedItems.reduce(
+    (sum, item) => sum + item.freeWeightKg,
+    0
+  );
+  const totalWeightKg = totalBilledWeightKg + totalFreeWeightKg;
   const subtotal = calculatedItems.reduce(
     (sum, item) => sum + item.totalCost,
     0
@@ -551,9 +566,16 @@ export function PurchaseForm({ suppliers, fishTypes, initialData }: PurchaseForm
                   className="rounded-lg border border-border bg-muted/30 p-4 space-y-3"
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-muted-foreground">
-                      Item #{index + 1}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-muted-foreground">
+                        Item #{index + 1}
+                      </span>
+                      {Number(item.freeWeightKg) > 0 && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
+                          +{item.freeWeightKg} kg Free ({calculatedItems[index].totalIntakeKg} kg Intake)
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-3">
                       {item.fishTypeId &&
                         item.weightKg > 0 &&
@@ -651,10 +673,10 @@ export function PurchaseForm({ suppliers, fishTypes, initialData }: PurchaseForm
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                     <div className="space-y-1">
                       <label className="text-[11px] font-medium text-muted-foreground">
-                        Quantity (kg) *
+                        Billed Qty (kg) *
                       </label>
                       <Input
                         type="number"
@@ -670,6 +692,28 @@ export function PurchaseForm({ suppliers, fishTypes, initialData }: PurchaseForm
                         }
                         placeholder="0.00"
                         className="h-8 text-xs font-mono"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 flex items-center justify-between">
+                        <span>Free Qty (kg)</span>
+                        <span className="text-[10px] text-muted-foreground">Bonus</span>
+                      </label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={item.freeWeightKg || ""}
+                        onChange={(e) =>
+                          updateItem(
+                            index,
+                            "freeWeightKg",
+                            parseFloat(e.target.value) || 0
+                          )
+                        }
+                        placeholder="0.00"
+                        className="h-8 text-xs font-mono border-emerald-500/30 focus-visible:ring-emerald-500"
                       />
                     </div>
 
@@ -921,11 +965,27 @@ export function PurchaseForm({ suppliers, fishTypes, initialData }: PurchaseForm
               <CardTitle className="text-sm">Purchase Summary</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              <div className="flex justify-between text-xs">
-                <span className="text-muted-foreground">Total Weight</span>
-                <span className="font-mono font-medium">
-                  {formatWeight(totalWeightKg)}
-                </span>
+              <div className="space-y-1 pb-1 border-b border-border/50">
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Billed Weight</span>
+                  <span className="font-mono font-medium">
+                    {formatWeight(totalBilledWeightKg)}
+                  </span>
+                </div>
+                {totalFreeWeightKg > 0 && (
+                  <div className="flex justify-between text-xs text-emerald-600 dark:text-emerald-400">
+                    <span>Free Bonus Weight</span>
+                    <span className="font-mono font-medium">
+                      +{formatWeight(totalFreeWeightKg)}
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between text-xs font-semibold">
+                  <span className="text-muted-foreground">Total Stock Intake</span>
+                  <span className="font-mono text-foreground">
+                    {formatWeight(totalWeightKg)}
+                  </span>
+                </div>
               </div>
               <div className="flex justify-between text-xs">
                 <span className="text-muted-foreground">

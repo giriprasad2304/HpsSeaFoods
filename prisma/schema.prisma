@@ -188,7 +188,8 @@ model PurchaseItem {
   fishType              FishType               @relation(fields: [fishTypeId], references: [id])
   grade                 String                 @default("Grade A")
   fishCount             Int?
-  weightKg              Float // Gross Quantity in kg
+  weightKg              Float // Billed / Purchased Quantity in kg
+  freeWeightKg          Float                  @default(0.0) // Free / Bonus quantity in kg provided by seller
   spoiledWeightKg       Float                  @default(0.0) // Spoiled / Rejected quantity in kg
   spoilageReason        String? // Reason for rejection or spoilage
   unitPricePerKg        Float // Rate per kg
@@ -238,7 +239,8 @@ model SaleItem {
   weightKg              Float // Gross Dispatched Quantity in kg
   spoiledWeightKg       Float                  @default(0.0) // Spoiled / Delivery rejection quantity in kg
   spoilageReason        String? // Reason for delivery rejection or transit loss
-  unitPricePerKg        Float
+  exactPurchasingCost   Float? // Exact purchasing cost per kg at procurement
+  unitPricePerKg        Float // Selling price per kg
   totalPrice            Float // (weightKg - spoiledWeightKg) * Rate per kg
   notes                 String?
   createdAt             DateTime               @default(now())

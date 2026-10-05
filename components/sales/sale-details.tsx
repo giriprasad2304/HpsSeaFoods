@@ -567,7 +567,8 @@ export function SaleDetails({ sale }: SaleDetailsProps) {
                       <TableHead className="text-right">Dispatched (kg)</TableHead>
                       <TableHead className="text-center">Spoiled / Rejected</TableHead>
                       <TableHead className="text-right">Billable Qty (kg)</TableHead>
-                      <TableHead className="text-right">Price / kg</TableHead>
+                      <TableHead className="text-right text-blue-600 dark:text-blue-400">Purchasing Cost / kg</TableHead>
+                      <TableHead className="text-right">Selling Price / kg</TableHead>
                       <TableHead className="text-right">Billed Total</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -577,6 +578,12 @@ export function SaleDetails({ sale }: SaleDetailsProps) {
                       const effectiveKg =
                         item.effectiveWeightKg ??
                         Math.max(0, item.weightKg - spoiledKg);
+                      const costRate = item.exactPurchasingCost;
+                      const marginPerKg =
+                        costRate !== null && costRate !== undefined
+                          ? item.unitPricePerKg - costRate
+                          : null;
+
                       return (
                         <TableRow key={item.id}>
                           <TableCell>
@@ -619,6 +626,22 @@ export function SaleDetails({ sale }: SaleDetailsProps) {
                           </TableCell>
                           <TableCell className="text-right text-xs font-mono font-bold text-primary">
                             {formatWeight(effectiveKg)}
+                          </TableCell>
+                          <TableCell className="text-right text-xs font-mono">
+                            {costRate !== null && costRate !== undefined ? (
+                              <div>
+                                <span className="font-medium text-foreground">
+                                  {formatCurrency(costRate)}
+                                </span>
+                                {marginPerKg !== null && (
+                                  <div className={`text-[10px] font-medium ${marginPerKg >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}>
+                                    {marginPerKg >= 0 ? "+" : ""}{formatCurrency(marginPerKg)}/kg
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
                           </TableCell>
                           <TableCell className="text-right text-xs font-mono">
                             {formatCurrency(item.unitPricePerKg)}

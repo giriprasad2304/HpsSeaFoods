@@ -21,7 +21,7 @@ import type {
  * Authoritative financial calculation helper.
  */
 export function calculatePurchaseTotals<
-  T extends { weightKg: number; unitPricePerKg: number }
+  T extends { weightKg: number; unitPricePerKg: number; freeWeightKg?: number | null }
 >(
   items: T[],
   transportCharges = 0,
@@ -31,11 +31,12 @@ export function calculatePurchaseTotals<
 ) {
   const calculatedItems = items.map((item) => ({
     ...item,
+    freeWeightKg: Number(item.freeWeightKg) || 0,
     totalCost: Number((item.weightKg * item.unitPricePerKg).toFixed(2)),
   }));
 
   const totalWeightKg = Number(
-    items.reduce((sum, item) => sum + item.weightKg, 0).toFixed(2)
+    items.reduce((sum, item) => sum + item.weightKg + (Number(item.freeWeightKg) || 0), 0).toFixed(2)
   );
 
   const subtotal = Number(
@@ -310,6 +311,8 @@ export async function getPurchaseById(id: string): Promise<PurchaseDetailDTO | n
         grade: item.grade,
         fishCount: item.fishCount,
         weightKg: item.weightKg,
+        freeWeightKg: item.freeWeightKg ?? 0,
+        totalIntakeWeightKg: Number((item.weightKg + (item.freeWeightKg ?? 0)).toFixed(2)),
         spoiledWeightKg: item.spoiledWeightKg ?? 0,
         spoilageReason: item.spoilageReason ?? null,
         effectiveWeightKg: Math.max(0, Number((item.weightKg - (item.spoiledWeightKg ?? 0)).toFixed(2))),
@@ -398,12 +401,16 @@ export async function createPurchase(
 
       // 2. Create Purchase Items & matching InventoryTransactions (+Quantity)
       for (const item of calculatedItems) {
+        const freeWeightKg = Number(item.freeWeightKg) || 0;
+        const totalIntakeKg = Number((item.weightKg + freeWeightKg).toFixed(2));
+
         const purchaseItem = await tx.purchaseItem.create({
           data: {
             purchaseId: purchase.id,
             fishTypeId: item.fishTypeId,
             grade: item.grade || "Grade A",
             weightKg: item.weightKg,
+            freeWeightKg,
             unitPricePerKg: item.unitPricePerKg,
             totalCost: item.totalCost,
             temperatureC: item.temperatureC,
@@ -411,17 +418,19 @@ export async function createPurchase(
           },
         });
 
-        // Transaction-based inventory entry: Inward Purchase (+Kg)
+        // Transaction-based inventory entry: Inward Purchase (+Kg including free bonus)
         await tx.inventoryTransaction.create({
           data: {
             fishTypeId: item.fishTypeId,
             transactionType: "PURCHASE_INWARD",
-            quantityKg: item.weightKg,
+            quantityKg: totalIntakeKg,
             unitCost: item.unitPricePerKg,
             purchaseItemId: purchaseItem.id,
             batchLotNumber: `LOT-${purchaseNumber}-${item.fishTypeId.slice(-4)}`,
             storageLocation: validated.landingHarbor || "Cold Storage Bay",
-            notes: `Harbor inward intake from ${purchaseNumber}`,
+            notes: freeWeightKg > 0
+              ? `Harbor inward intake from ${purchaseNumber} (${item.weightKg} kg paid + ${freeWeightKg} kg free)`
+              : `Harbor inward intake from ${purchaseNumber}`,
           },
         });
       }
@@ -539,12 +548,16 @@ export async function updatePurchase(
 
         // Recreate updated items & transactions
         for (const item of totals.calculatedItems) {
+          const freeWeightKg = Number(item.freeWeightKg) || 0;
+          const totalIntakeKg = Number((item.weightKg + freeWeightKg).toFixed(2));
+
           const purchaseItem = await tx.purchaseItem.create({
             data: {
               purchaseId: id,
               fishTypeId: item.fishTypeId,
               grade: item.grade || "Grade A",
               weightKg: item.weightKg,
+              freeWeightKg,
               unitPricePerKg: item.unitPricePerKg,
               totalCost: item.totalCost,
               temperatureC: item.temperatureC,
@@ -556,12 +569,14 @@ export async function updatePurchase(
             data: {
               fishTypeId: item.fishTypeId,
               transactionType: "PURCHASE_INWARD",
-              quantityKg: item.weightKg,
+              quantityKg: totalIntakeKg,
               unitCost: item.unitPricePerKg,
               purchaseItemId: purchaseItem.id,
               batchLotNumber: `LOT-${existing.purchaseNumber}-${item.fishTypeId.slice(-4)}`,
               storageLocation: validated.landingHarbor || existing.landingHarbor || "Cold Storage Bay",
-              notes: `Updated inward intake for ${existing.purchaseNumber}`,
+              notes: freeWeightKg > 0
+                ? `Updated inward intake for ${existing.purchaseNumber} (${item.weightKg} kg paid + ${freeWeightKg} kg free)`
+                : `Updated inward intake for ${existing.purchaseNumber}`,
             },
           });
         }

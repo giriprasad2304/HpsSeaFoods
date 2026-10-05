@@ -21,7 +21,7 @@ import type {
  * Authoritative financial calculation helper for Sales.
  */
 export function calculateSaleTotals<
-  T extends { weightKg: number; unitPricePerKg: number }
+  T extends { weightKg: number; unitPricePerKg: number; exactPurchasingCost?: number | null }
 >(
   items: T[],
   taxAmount = 0,
@@ -30,6 +30,10 @@ export function calculateSaleTotals<
 ) {
   const calculatedItems = items.map((item) => ({
     ...item,
+    exactPurchasingCost:
+      item.exactPurchasingCost !== undefined && item.exactPurchasingCost !== null
+        ? Number(item.exactPurchasingCost)
+        : null,
     totalPrice: Number((item.weightKg * item.unitPricePerKg).toFixed(2)),
   }));
 
@@ -330,6 +334,7 @@ export async function getSaleById(id: string): Promise<SaleDetailDTO | null> {
         fishTypeCode: item.fishType.code,
         grade: item.grade,
         weightKg: item.weightKg,
+        exactPurchasingCost: item.exactPurchasingCost ?? null,
         spoiledWeightKg: item.spoiledWeightKg ?? 0,
         spoilageReason: item.spoilageReason ?? null,
         effectiveWeightKg: Math.max(0, Number((item.weightKg - (item.spoiledWeightKg ?? 0)).toFixed(2))),
@@ -415,7 +420,7 @@ export async function createCustomer(data: {
 }
 
 /**
- * Creates a sale order, enforces stock availability, and logs negative inventory transaction.
+ * Creates a sale order and logs negative inventory transaction.
  */
 export async function createSale(
   rawInput: CreateSaleInput,
@@ -446,21 +451,7 @@ export async function createSale(
 
   const sale = await prisma.$transaction(
     async (tx) => {
-      // 1. Stock verification: Ensure enough stock exists for each fish item
-      for (const item of calculatedItems) {
-        const availableStock = await getAvailableFishStock(item.fishTypeId, tx);
-        if (availableStock < item.weightKg) {
-          const fishType = await tx.fishType.findUnique({
-            where: { id: item.fishTypeId },
-          });
-          const fishLabel = fishType ? `${fishType.name} (${fishType.code})` : item.fishTypeId;
-          throw new Error(
-            `Insufficient inventory for ${fishLabel}. Available: ${availableStock} kg, Requested: ${item.weightKg} kg.`
-          );
-        }
-      }
-
-      // 2. Create Sale Header
+      // 1. Create Sale Header
       const sale = await tx.sale.create({
         data: {
           saleNumber,
@@ -479,7 +470,7 @@ export async function createSale(
         },
       });
 
-      // 3. Create Sale Items and corresponding Negative Inventory Transactions (-Quantity kg)
+      // 2. Create Sale Items and corresponding Negative Inventory Transactions (-Quantity kg)
       for (const item of calculatedItems) {
         const saleItem = await tx.saleItem.create({
           data: {
@@ -487,6 +478,10 @@ export async function createSale(
             fishTypeId: item.fishTypeId,
             grade: item.grade || "Grade A",
             weightKg: item.weightKg,
+            exactPurchasingCost:
+              item.exactPurchasingCost !== undefined && item.exactPurchasingCost !== null
+                ? Number(item.exactPurchasingCost)
+                : null,
             unitPricePerKg: item.unitPricePerKg,
             totalPrice: item.totalPrice,
             notes: item.notes,
@@ -508,7 +503,7 @@ export async function createSale(
         });
       }
 
-      // 4. Record initial payment receipt if paidAmount > 0
+      // 3. Record initial payment receipt if paidAmount > 0
       if (paidAmount > 0) {
         const paymentNumber = `RCP-${new Date().getFullYear()}-${String(Date.now()).slice(-5)}`;
         await tx.payment.create({
@@ -525,7 +520,7 @@ export async function createSale(
         });
       }
 
-      // 5. Update Customer outstanding balance
+      // 4. Update Customer outstanding balance
       await tx.customer.update({
         where: { id: validated.customerId },
         data: {
@@ -543,7 +538,7 @@ export async function createSale(
     }
   );
 
-  // 6. Audit log
+  // 5. Audit log
   await logAuditEvent({
     userId,
     action: "SALE_CREATED",
@@ -612,20 +607,6 @@ export async function updateSale(
           where: { saleId: id },
         });
 
-        // Stock verification for new items
-        for (const item of totals.calculatedItems) {
-          const availableStock = await getAvailableFishStock(item.fishTypeId, tx);
-          if (availableStock < item.weightKg) {
-            const fishType = await tx.fishType.findUnique({
-              where: { id: item.fishTypeId },
-            });
-            const fishLabel = fishType ? `${fishType.name} (${fishType.code})` : item.fishTypeId;
-            throw new Error(
-              `Insufficient inventory for ${fishLabel}. Available: ${availableStock} kg, Requested: ${item.weightKg} kg.`
-            );
-          }
-        }
-
         // Recreate updated items & negative inventory transactions
         for (const item of totals.calculatedItems) {
           const saleItem = await tx.saleItem.create({
@@ -634,6 +615,10 @@ export async function updateSale(
               fishTypeId: item.fishTypeId,
               grade: item.grade || "Grade A",
               weightKg: item.weightKg,
+              exactPurchasingCost:
+                item.exactPurchasingCost !== undefined && item.exactPurchasingCost !== null
+                  ? Number(item.exactPurchasingCost)
+                  : null,
               unitPricePerKg: item.unitPricePerKg,
               totalPrice: item.totalPrice,
               notes: item.notes,

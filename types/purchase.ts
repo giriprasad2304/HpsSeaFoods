@@ -9,7 +9,8 @@ import type {
 export interface PurchaseItemInput {
   fishTypeId: string;
   grade?: string;
-  weightKg: number; // Quantity in kg
+  weightKg: number; // Purchased / billed quantity in kg
+  freeWeightKg?: number; // Free / bonus quantity in kg from seller
   unitPricePerKg: number; // Rate per kg
   totalCost?: number; // Calculated: Quantity * Rate/kg
   temperatureC?: number | null;
@@ -24,7 +25,9 @@ export interface PurchaseItemDetailDTO {
   fishTypeCode: string;
   grade: string;
   fishCount?: number | null;
-  weightKg: number; // Landed gross weight
+  weightKg: number; // Billed weight
+  freeWeightKg?: number; // Free / bonus weight
+  totalIntakeWeightKg?: number; // weightKg + freeWeightKg
   spoiledWeightKg?: number; // Rejected / spoiled weight
   spoilageReason?: string | null;
   effectiveWeightKg?: number; // weightKg - spoiledWeightKg
