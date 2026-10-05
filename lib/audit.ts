@@ -9,6 +9,7 @@ export interface LogAuditParams {
   metadata?: Prisma.InputJsonValue;
   ipAddress?: string | null;
   userAgent?: string | null;
+  tx?: Prisma.TransactionClient;
 }
 
 export async function logAuditEvent({
@@ -19,9 +20,11 @@ export async function logAuditEvent({
   metadata,
   ipAddress,
   userAgent,
+  tx,
 }: LogAuditParams) {
   try {
-    return await prisma.auditLog.create({
+    const client = tx || prisma;
+    return await client.auditLog.create({
       data: {
         userId,
         action,
@@ -38,3 +41,4 @@ export async function logAuditEvent({
     return null;
   }
 }
+

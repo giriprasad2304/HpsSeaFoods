@@ -444,167 +444,10 @@ export async function createSale(
     validated.saleNumber ||
     `INV-${new Date().getFullYear()}-${String(Date.now()).slice(-5)}`;
 
-  return prisma.$transaction(async (tx) => {
-    // 1. Stock verification: Ensure enough stock exists for each fish item
-    for (const item of calculatedItems) {
-      const availableStock = await getAvailableFishStock(item.fishTypeId, tx);
-      if (availableStock < item.weightKg) {
-        const fishType = await tx.fishType.findUnique({
-          where: { id: item.fishTypeId },
-        });
-        const fishLabel = fishType ? `${fishType.name} (${fishType.code})` : item.fishTypeId;
-        throw new Error(
-          `Insufficient inventory for ${fishLabel}. Available: ${availableStock} kg, Requested: ${item.weightKg} kg.`
-        );
-      }
-    }
-
-    // 2. Create Sale Header
-    const sale = await tx.sale.create({
-      data: {
-        saleNumber,
-        customerId: validated.customerId,
-        saleDate: new Date(validated.saleDate),
-        deliveryDate: validated.deliveryDate ? new Date(validated.deliveryDate) : null,
-        status: validated.status ?? "CONFIRMED",
-        paymentStatus,
-        subtotal,
-        taxAmount,
-        discountAmount,
-        totalAmount,
-        paidAmount,
-        balanceAmount,
-        notes: validated.notes,
-      },
-    });
-
-    // 3. Create Sale Items and corresponding Negative Inventory Transactions (-Quantity kg)
-    for (const item of calculatedItems) {
-      const saleItem = await tx.saleItem.create({
-        data: {
-          saleId: sale.id,
-          fishTypeId: item.fishTypeId,
-          grade: item.grade || "Grade A",
-          weightKg: item.weightKg,
-          unitPricePerKg: item.unitPricePerKg,
-          totalPrice: item.totalPrice,
-          notes: item.notes,
-        },
-      });
-
-      // Negative inventory transaction representing outward sales dispatch
-      await tx.inventoryTransaction.create({
-        data: {
-          fishTypeId: item.fishTypeId,
-          transactionType: "SALE_OUTWARD",
-          quantityKg: -Math.abs(item.weightKg), // Negative stock movement
-          unitCost: item.unitPricePerKg,
-          saleItemId: saleItem.id,
-          batchLotNumber: `LOT-SALE-${saleNumber}-${item.fishTypeId.slice(-4)}`,
-          storageLocation: "Dispatched Cold Logistics",
-          notes: `Sales fulfillment dispatch for order ${saleNumber}`,
-        },
-      });
-    }
-
-    // 4. Record initial payment receipt if paidAmount > 0
-    if (paidAmount > 0) {
-      const paymentNumber = `RCP-${new Date().getFullYear()}-${String(Date.now()).slice(-5)}`;
-      await tx.payment.create({
-        data: {
-          paymentNumber,
-          paymentType: "CUSTOMER_RECEIPT",
-          amount: paidAmount,
-          paymentMethod: validated.paymentMethod || "BANK_TRANSFER",
-          paymentDate: new Date(validated.saleDate),
-          customerId: validated.customerId,
-          saleId: sale.id,
-          notes: `Initial customer receipt for ${saleNumber}`,
-        },
-      });
-    }
-
-    // 5. Update Customer outstanding balance
-    await tx.customer.update({
-      where: { id: validated.customerId },
-      data: {
-        outstandingBalance: {
-          increment: balanceAmount,
-        },
-      },
-    });
-
-    // 6. Audit log
-    await logAuditEvent({
-      userId,
-      action: "SALE_CREATED",
-      entity: "SALE",
-      entityId: sale.id,
-      metadata: {
-        saleNumber,
-        totalAmount,
-        totalWeightKg,
-        itemsCount: calculatedItems.length,
-      },
-    });
-
-    return sale;
-  });
-}
-
-/**
- * Updates an existing sale order and recalibrates inventory transactions.
- */
-export async function updateSale(
-  id: string,
-  rawInput: UpdateSaleInput,
-  userId?: string
-) {
-  const validated = updateSaleSchema.parse(rawInput);
-
-  return prisma.$transaction(async (tx) => {
-    const existing = await tx.sale.findUniqueOrThrow({
-      where: { id },
-      include: { items: true },
-    });
-
-    const oldBalanceAmount = existing.balanceAmount;
-    const oldCustomerId = existing.customerId;
-
-    let subtotal = existing.subtotal;
-    let taxAmount = validated.taxAmount ?? existing.taxAmount;
-    let discountAmount = validated.discountAmount ?? existing.discountAmount;
-    let totalAmount = existing.totalAmount;
-    let balanceAmount = existing.balanceAmount;
-    let paymentStatus = existing.paymentStatus;
-
-    // Check if tax/discount changed even without item changes
-    const taxDiscountChanged = taxAmount !== existing.taxAmount || discountAmount !== existing.discountAmount;
-
-    if (validated.items && validated.items.length > 0) {
-      const totals = calculateSaleTotals(
-        validated.items,
-        taxAmount,
-        discountAmount,
-        existing.paidAmount
-      );
-      subtotal = totals.subtotal;
-      taxAmount = totals.taxAmount;
-      discountAmount = totals.discountAmount;
-      totalAmount = totals.totalAmount;
-      balanceAmount = totals.balanceAmount;
-      paymentStatus = totals.paymentStatus;
-
-      // Clean up previous sale inventory transactions and items
-      await tx.inventoryTransaction.deleteMany({
-        where: { saleItemId: { in: existing.items.map((i) => i.id) } },
-      });
-      await tx.saleItem.deleteMany({
-        where: { saleId: id },
-      });
-
-      // Stock verification for new items
-      for (const item of totals.calculatedItems) {
+  const sale = await prisma.$transaction(
+    async (tx) => {
+      // 1. Stock verification: Ensure enough stock exists for each fish item
+      for (const item of calculatedItems) {
         const availableStock = await getAvailableFishStock(item.fishTypeId, tx);
         if (availableStock < item.weightKg) {
           const fishType = await tx.fishType.findUnique({
@@ -617,11 +460,30 @@ export async function updateSale(
         }
       }
 
-      // Recreate updated items & negative inventory transactions
-      for (const item of totals.calculatedItems) {
+      // 2. Create Sale Header
+      const sale = await tx.sale.create({
+        data: {
+          saleNumber,
+          customerId: validated.customerId,
+          saleDate: new Date(validated.saleDate),
+          deliveryDate: validated.deliveryDate ? new Date(validated.deliveryDate) : null,
+          status: validated.status ?? "CONFIRMED",
+          paymentStatus,
+          subtotal,
+          taxAmount,
+          discountAmount,
+          totalAmount,
+          paidAmount,
+          balanceAmount,
+          notes: validated.notes,
+        },
+      });
+
+      // 3. Create Sale Items and corresponding Negative Inventory Transactions (-Quantity kg)
+      for (const item of calculatedItems) {
         const saleItem = await tx.saleItem.create({
           data: {
-            saleId: id,
+            saleId: sale.id,
             fishTypeId: item.fishTypeId,
             grade: item.grade || "Grade A",
             weightKg: item.weightKg,
@@ -631,124 +493,290 @@ export async function updateSale(
           },
         });
 
+        // Negative inventory transaction representing outward sales dispatch
         await tx.inventoryTransaction.create({
           data: {
             fishTypeId: item.fishTypeId,
             transactionType: "SALE_OUTWARD",
-            quantityKg: -Math.abs(item.weightKg),
+            quantityKg: -Math.abs(item.weightKg), // Negative stock movement
             unitCost: item.unitPricePerKg,
             saleItemId: saleItem.id,
-            batchLotNumber: `LOT-SALE-${existing.saleNumber}-${item.fishTypeId.slice(-4)}`,
+            batchLotNumber: `LOT-SALE-${saleNumber}-${item.fishTypeId.slice(-4)}`,
             storageLocation: "Dispatched Cold Logistics",
-            notes: `Updated sales fulfillment for ${existing.saleNumber}`,
+            notes: `Sales fulfillment dispatch for order ${saleNumber}`,
           },
         });
       }
-    } else if (taxDiscountChanged) {
-      // Items not changed but tax/discount changed — recalculate totals
-      totalAmount = Number(Math.max(0, subtotal + taxAmount - discountAmount).toFixed(2));
-      balanceAmount = Number(Math.max(0, totalAmount - existing.paidAmount).toFixed(2));
-      if (balanceAmount <= 0 && totalAmount > 0) paymentStatus = "PAID";
-      else if (existing.paidAmount > 0 && existing.paidAmount < totalAmount) paymentStatus = "PARTIAL";
-      else if (existing.paidAmount <= 0) paymentStatus = "UNPAID";
-    }
 
-    const newCustomerId = validated.customerId ?? existing.customerId;
-
-    const updated = await tx.sale.update({
-      where: { id },
-      data: {
-        customerId: newCustomerId,
-        saleDate: validated.saleDate ? new Date(validated.saleDate) : existing.saleDate,
-        deliveryDate: validated.deliveryDate !== undefined ? (validated.deliveryDate ? new Date(validated.deliveryDate) : null) : existing.deliveryDate,
-        status: validated.status ?? existing.status,
-        subtotal,
-        taxAmount,
-        discountAmount,
-        totalAmount,
-        balanceAmount,
-        paymentStatus,
-        notes: validated.notes !== undefined ? validated.notes : existing.notes,
-      },
-    });
-
-    // Adjust customer outstanding balance
-    if (newCustomerId !== oldCustomerId) {
-      await tx.customer.update({
-        where: { id: oldCustomerId },
-        data: { outstandingBalance: { decrement: oldBalanceAmount } },
-      });
-      await tx.customer.update({
-        where: { id: newCustomerId },
-        data: { outstandingBalance: { increment: balanceAmount } },
-      });
-    } else {
-      const balanceDelta = Number((balanceAmount - oldBalanceAmount).toFixed(2));
-      if (balanceDelta !== 0) {
-        await tx.customer.update({
-          where: { id: oldCustomerId },
-          data: { outstandingBalance: { increment: balanceDelta } },
+      // 4. Record initial payment receipt if paidAmount > 0
+      if (paidAmount > 0) {
+        const paymentNumber = `RCP-${new Date().getFullYear()}-${String(Date.now()).slice(-5)}`;
+        await tx.payment.create({
+          data: {
+            paymentNumber,
+            paymentType: "CUSTOMER_RECEIPT",
+            amount: paidAmount,
+            paymentMethod: validated.paymentMethod || "BANK_TRANSFER",
+            paymentDate: new Date(validated.saleDate),
+            customerId: validated.customerId,
+            saleId: sale.id,
+            notes: `Initial customer receipt for ${saleNumber}`,
+          },
         });
       }
+
+      // 5. Update Customer outstanding balance
+      await tx.customer.update({
+        where: { id: validated.customerId },
+        data: {
+          outstandingBalance: {
+            increment: balanceAmount,
+          },
+        },
+      });
+
+      return sale;
+    },
+    {
+      maxWait: 10000,
+      timeout: 30000,
     }
+  );
 
-    await logAuditEvent({
-      userId,
-      action: "SALE_UPDATED",
-      entity: "SALE",
-      entityId: id,
-      metadata: { totalAmount, status: updated.status, oldTotal: existing.totalAmount },
-    });
-
-    return updated;
+  // 6. Audit log
+  await logAuditEvent({
+    userId,
+    action: "SALE_CREATED",
+    entity: "SALE",
+    entityId: sale.id,
+    metadata: {
+      saleNumber,
+      totalAmount,
+      totalWeightKg,
+      itemsCount: calculatedItems.length,
+    },
   });
+
+  return sale;
+}
+
+/**
+ * Updates an existing sale order and recalibrates inventory transactions.
+ */
+export async function updateSale(
+  id: string,
+  rawInput: UpdateSaleInput,
+  userId?: string
+) {
+  const validated = updateSaleSchema.parse(rawInput);
+
+  const txResult = await prisma.$transaction(
+    async (tx) => {
+      const existing = await tx.sale.findUniqueOrThrow({
+        where: { id },
+        include: { items: true },
+      });
+
+      const oldBalanceAmount = existing.balanceAmount;
+      const oldCustomerId = existing.customerId;
+
+      let subtotal = existing.subtotal;
+      let taxAmount = validated.taxAmount ?? existing.taxAmount;
+      let discountAmount = validated.discountAmount ?? existing.discountAmount;
+      let totalAmount = existing.totalAmount;
+      let balanceAmount = existing.balanceAmount;
+      let paymentStatus = existing.paymentStatus;
+
+      // Check if tax/discount changed even without item changes
+      const taxDiscountChanged = taxAmount !== existing.taxAmount || discountAmount !== existing.discountAmount;
+
+      if (validated.items && validated.items.length > 0) {
+        const totals = calculateSaleTotals(
+          validated.items,
+          taxAmount,
+          discountAmount,
+          existing.paidAmount
+        );
+        subtotal = totals.subtotal;
+        taxAmount = totals.taxAmount;
+        discountAmount = totals.discountAmount;
+        totalAmount = totals.totalAmount;
+        balanceAmount = totals.balanceAmount;
+        paymentStatus = totals.paymentStatus;
+
+        // Clean up previous sale inventory transactions and items
+        await tx.inventoryTransaction.deleteMany({
+          where: { saleItemId: { in: existing.items.map((i) => i.id) } },
+        });
+        await tx.saleItem.deleteMany({
+          where: { saleId: id },
+        });
+
+        // Stock verification for new items
+        for (const item of totals.calculatedItems) {
+          const availableStock = await getAvailableFishStock(item.fishTypeId, tx);
+          if (availableStock < item.weightKg) {
+            const fishType = await tx.fishType.findUnique({
+              where: { id: item.fishTypeId },
+            });
+            const fishLabel = fishType ? `${fishType.name} (${fishType.code})` : item.fishTypeId;
+            throw new Error(
+              `Insufficient inventory for ${fishLabel}. Available: ${availableStock} kg, Requested: ${item.weightKg} kg.`
+            );
+          }
+        }
+
+        // Recreate updated items & negative inventory transactions
+        for (const item of totals.calculatedItems) {
+          const saleItem = await tx.saleItem.create({
+            data: {
+              saleId: id,
+              fishTypeId: item.fishTypeId,
+              grade: item.grade || "Grade A",
+              weightKg: item.weightKg,
+              unitPricePerKg: item.unitPricePerKg,
+              totalPrice: item.totalPrice,
+              notes: item.notes,
+            },
+          });
+
+          await tx.inventoryTransaction.create({
+            data: {
+              fishTypeId: item.fishTypeId,
+              transactionType: "SALE_OUTWARD",
+              quantityKg: -Math.abs(item.weightKg),
+              unitCost: item.unitPricePerKg,
+              saleItemId: saleItem.id,
+              batchLotNumber: `LOT-SALE-${existing.saleNumber}-${item.fishTypeId.slice(-4)}`,
+              storageLocation: "Dispatched Cold Logistics",
+              notes: `Updated sales fulfillment for ${existing.saleNumber}`,
+            },
+          });
+        }
+      } else if (taxDiscountChanged) {
+        // Items not changed but tax/discount changed — recalculate totals
+        totalAmount = Number(Math.max(0, subtotal + taxAmount - discountAmount).toFixed(2));
+        balanceAmount = Number(Math.max(0, totalAmount - existing.paidAmount).toFixed(2));
+        if (balanceAmount <= 0 && totalAmount > 0) paymentStatus = "PAID";
+        else if (existing.paidAmount > 0 && existing.paidAmount < totalAmount) paymentStatus = "PARTIAL";
+        else if (existing.paidAmount <= 0) paymentStatus = "UNPAID";
+      }
+
+      const newCustomerId = validated.customerId ?? existing.customerId;
+
+      const updated = await tx.sale.update({
+        where: { id },
+        data: {
+          customerId: newCustomerId,
+          saleDate: validated.saleDate ? new Date(validated.saleDate) : existing.saleDate,
+          deliveryDate: validated.deliveryDate !== undefined ? (validated.deliveryDate ? new Date(validated.deliveryDate) : null) : existing.deliveryDate,
+          status: validated.status ?? existing.status,
+          subtotal,
+          taxAmount,
+          discountAmount,
+          totalAmount,
+          balanceAmount,
+          paymentStatus,
+          notes: validated.notes !== undefined ? validated.notes : existing.notes,
+        },
+      });
+
+      // Adjust customer outstanding balance
+      if (newCustomerId !== oldCustomerId) {
+        await tx.customer.update({
+          where: { id: oldCustomerId },
+          data: { outstandingBalance: { decrement: oldBalanceAmount } },
+        });
+        await tx.customer.update({
+          where: { id: newCustomerId },
+          data: { outstandingBalance: { increment: balanceAmount } },
+        });
+      } else {
+        const balanceDelta = Number((balanceAmount - oldBalanceAmount).toFixed(2));
+        if (balanceDelta !== 0) {
+          await tx.customer.update({
+            where: { id: oldCustomerId },
+            data: { outstandingBalance: { increment: balanceDelta } },
+          });
+        }
+      }
+
+      return {
+        updated,
+        totalAmount,
+        oldTotal: existing.totalAmount,
+      };
+    },
+    {
+      maxWait: 10000,
+      timeout: 30000,
+    }
+  );
+
+  await logAuditEvent({
+    userId,
+    action: "SALE_UPDATED",
+    entity: "SALE",
+    entityId: id,
+    metadata: { totalAmount: txResult.totalAmount, status: txResult.updated.status, oldTotal: txResult.oldTotal },
+  });
+
+  return txResult.updated;
 }
 
 /**
  * Deletes a sale order, rolls back negative inventory transactions, and removes payments.
  */
 export async function deleteSale(id: string, userId?: string) {
-  return prisma.$transaction(async (tx) => {
-    const sale = await tx.sale.findUniqueOrThrow({
-      where: { id },
-      include: { items: true },
-    });
+  const saleInfo = await prisma.$transaction(
+    async (tx) => {
+      const sale = await tx.sale.findUniqueOrThrow({
+        where: { id },
+        include: { items: true },
+      });
 
-    // Delete linked inventory transactions
-    await tx.inventoryTransaction.deleteMany({
-      where: { saleItemId: { in: sale.items.map((i) => i.id) } },
-    });
+      // Delete linked inventory transactions
+      await tx.inventoryTransaction.deleteMany({
+        where: { saleItemId: { in: sale.items.map((i) => i.id) } },
+      });
 
-    // Delete linked payments
-    await tx.payment.deleteMany({
-      where: { saleId: id },
-    });
+      // Delete linked payments
+      await tx.payment.deleteMany({
+        where: { saleId: id },
+      });
 
-    // Delete sale items and sale record
-    await tx.sale.delete({
-      where: { id },
-    });
+      // Delete sale items and sale record
+      await tx.sale.delete({
+        where: { id },
+      });
 
-    // Adjust customer balance
-    await tx.customer.update({
-      where: { id: sale.customerId },
-      data: {
-        outstandingBalance: {
-          decrement: sale.balanceAmount,
+      // Adjust customer balance
+      await tx.customer.update({
+        where: { id: sale.customerId },
+        data: {
+          outstandingBalance: {
+            decrement: sale.balanceAmount,
+          },
         },
-      },
-    });
+      });
 
-    await logAuditEvent({
-      userId,
-      action: "SALE_DELETED",
-      entity: "SALE",
-      entityId: id,
-      metadata: { saleNumber: sale.saleNumber },
-    });
+      return { saleNumber: sale.saleNumber };
+    },
+    {
+      maxWait: 10000,
+      timeout: 30000,
+    }
+  );
 
-    return true;
+  await logAuditEvent({
+    userId,
+    action: "SALE_DELETED",
+    entity: "SALE",
+    entityId: id,
+    metadata: { saleNumber: saleInfo.saleNumber },
   });
+
+  return true;
 }
 
 /**
@@ -761,69 +789,82 @@ export async function recordSalePayment(
 ) {
   const validated = recordSalePaymentSchema.parse(rawPayment);
 
-  return prisma.$transaction(async (tx) => {
-    const sale = await tx.sale.findUniqueOrThrow({
-      where: { id: saleId },
-    });
+  const txResult = await prisma.$transaction(
+    async (tx) => {
+      const sale = await tx.sale.findUniqueOrThrow({
+        where: { id: saleId },
+      });
 
-    const newPaidAmount = Number((sale.paidAmount + validated.amount).toFixed(2));
-    const newBalanceAmount = Number(
-      Math.max(0, sale.totalAmount - newPaidAmount).toFixed(2)
-    );
-    const newPaymentStatus: PaymentStatus =
-      newBalanceAmount <= 0 ? "PAID" : "PARTIAL";
+      const newPaidAmount = Number((sale.paidAmount + validated.amount).toFixed(2));
+      const newBalanceAmount = Number(
+        Math.max(0, sale.totalAmount - newPaidAmount).toFixed(2)
+      );
+      const newPaymentStatus: PaymentStatus =
+        newBalanceAmount <= 0 ? "PAID" : "PARTIAL";
 
-    const paymentNumber =
-      validated.referenceNumber ||
-      `RCP-${new Date().getFullYear()}-${String(Date.now()).slice(-5)}`;
+      const paymentNumber =
+        validated.referenceNumber ||
+        `RCP-${new Date().getFullYear()}-${String(Date.now()).slice(-5)}`;
 
-    const payment = await tx.payment.create({
-      data: {
-        paymentNumber,
-        paymentType: "CUSTOMER_RECEIPT",
-        amount: validated.amount,
-        paymentMethod: validated.paymentMethod,
-        paymentDate: new Date(validated.paymentDate),
-        customerId: sale.customerId,
-        saleId: sale.id,
-        referenceNumber: validated.referenceNumber,
-        notes: validated.notes,
-      },
-    });
-
-    await tx.sale.update({
-      where: { id: saleId },
-      data: {
-        paidAmount: newPaidAmount,
-        balanceAmount: newBalanceAmount,
-        paymentStatus: newPaymentStatus,
-      },
-    });
-
-    // Decrement customer outstanding balance
-    await tx.customer.update({
-      where: { id: sale.customerId },
-      data: {
-        outstandingBalance: {
-          decrement: validated.amount,
+      const payment = await tx.payment.create({
+        data: {
+          paymentNumber,
+          paymentType: "CUSTOMER_RECEIPT",
+          amount: validated.amount,
+          paymentMethod: validated.paymentMethod,
+          paymentDate: new Date(validated.paymentDate),
+          customerId: sale.customerId,
+          saleId: sale.id,
+          referenceNumber: validated.referenceNumber,
+          notes: validated.notes,
         },
-      },
-    });
+      });
 
-    await logAuditEvent({
-      userId,
-      action: "SALE_PAYMENT_RECORDED",
-      entity: "SALE",
-      entityId: saleId,
-      metadata: {
+      await tx.sale.update({
+        where: { id: saleId },
+        data: {
+          paidAmount: newPaidAmount,
+          balanceAmount: newBalanceAmount,
+          paymentStatus: newPaymentStatus,
+        },
+      });
+
+      // Decrement customer outstanding balance
+      await tx.customer.update({
+        where: { id: sale.customerId },
+        data: {
+          outstandingBalance: {
+            decrement: validated.amount,
+          },
+        },
+      });
+
+      return {
+        payment,
         paymentNumber,
         amount: validated.amount,
         newBalance: newBalanceAmount,
-      },
-    });
+      };
+    },
+    {
+      maxWait: 10000,
+      timeout: 30000,
+    }
+  );
 
-    return payment;
+  await logAuditEvent({
+    userId,
+    action: "SALE_PAYMENT_RECORDED",
+    entity: "SALE",
+    entityId: saleId,
+    metadata: {
+      paymentNumber: txResult.paymentNumber,
+      amount: txResult.amount,
+      newBalance: txResult.newBalance,
+    },
   });
+
+  return txResult.payment;
 }
 
 /**
@@ -899,117 +940,132 @@ export async function updateSaleSpoilage(
   input: UpdateSaleSpoilageInput,
   userId?: string
 ) {
-  return await prisma.$transaction(async (tx) => {
-    const sale = await tx.sale.findUnique({
-      where: { id: saleId },
-      include: {
-        customer: true,
-        items: true,
-      },
-    });
-
-    if (!sale) {
-      throw new Error(`Sale with ID ${saleId} not found`);
-    }
-
-    // Apply spoilage updates to each specified item
-    for (const itemInput of input.items) {
-      const existingItem = sale.items.find((i) => i.id === itemInput.itemId);
-      if (!existingItem) continue;
-
-      const spoiledKg = Math.max(
-        0,
-        Math.min(existingItem.weightKg, Number(itemInput.spoiledWeightKg) || 0)
-      );
-      const effectiveKg = Math.max(0, existingItem.weightKg - spoiledKg);
-      const newTotalPrice = Number(
-        (effectiveKg * existingItem.unitPricePerKg).toFixed(2)
-      );
-
-      await tx.saleItem.update({
-        where: { id: itemInput.itemId },
-        data: {
-          spoiledWeightKg: spoiledKg,
-          spoilageReason: itemInput.spoilageReason ? itemInput.spoilageReason.trim() : null,
-          totalPrice: newTotalPrice,
+  const result = await prisma.$transaction(
+    async (tx) => {
+      const sale = await tx.sale.findUnique({
+        where: { id: saleId },
+        include: {
+          customer: true,
+          items: true,
         },
       });
-    }
 
-    // Fetch updated items to recalculate totals
-    const updatedItems = await tx.saleItem.findMany({
-      where: { saleId },
-    });
+      if (!sale) {
+        throw new Error(`Sale with ID ${saleId} not found`);
+      }
 
-    const newSubtotal = Number(
-      updatedItems.reduce((sum, item) => sum + item.totalPrice, 0).toFixed(2)
-    );
-    const newTotalAmount = Number(
-      Math.max(0, newSubtotal + sale.taxAmount - sale.discountAmount).toFixed(2)
-    );
-    const newBalanceAmount = Number(
-      Math.max(0, newTotalAmount - sale.paidAmount).toFixed(2)
-    );
+      // Apply spoilage updates to each specified item
+      for (const itemInput of input.items) {
+        const existingItem = sale.items.find((i) => i.id === itemInput.itemId);
+        if (!existingItem) continue;
 
-    let newPaymentStatus: PaymentStatus = sale.paymentStatus as PaymentStatus;
-    if (sale.paidAmount >= newTotalAmount && newTotalAmount > 0) {
-      newPaymentStatus = "PAID";
-    } else if (sale.paidAmount > 0) {
-      newPaymentStatus = "PARTIAL";
-    } else {
-      newPaymentStatus = "UNPAID";
-    }
+        const spoiledKg = Math.max(
+          0,
+          Math.min(existingItem.weightKg, Number(itemInput.spoiledWeightKg) || 0)
+        );
+        const effectiveKg = Math.max(0, existingItem.weightKg - spoiledKg);
+        const newTotalPrice = Number(
+          (effectiveKg * existingItem.unitPricePerKg).toFixed(2)
+        );
 
-    const deltaTotal = Number((newTotalAmount - sale.totalAmount).toFixed(2));
-
-    const updatedSale = await tx.sale.update({
-      where: { id: saleId },
-      data: {
-        subtotal: newSubtotal,
-        totalAmount: newTotalAmount,
-        balanceAmount: newBalanceAmount,
-        paymentStatus: newPaymentStatus,
-      },
-      include: {
-        customer: true,
-        items: {
-          include: {
-            fishType: true,
+        await tx.saleItem.update({
+          where: { id: itemInput.itemId },
+          data: {
+            spoiledWeightKg: spoiledKg,
+            spoilageReason: itemInput.spoilageReason ? itemInput.spoilageReason.trim() : null,
+            totalPrice: newTotalPrice,
           },
+        });
+      }
+
+      // Fetch updated items to recalculate totals
+      const updatedItems = await tx.saleItem.findMany({
+        where: { saleId },
+      });
+
+      const newSubtotal = Number(
+        updatedItems.reduce((sum, item) => sum + item.totalPrice, 0).toFixed(2)
+      );
+      const newTotalAmount = Number(
+        Math.max(0, newSubtotal + sale.taxAmount - sale.discountAmount).toFixed(2)
+      );
+      const newBalanceAmount = Number(
+        Math.max(0, newTotalAmount - sale.paidAmount).toFixed(2)
+      );
+
+      let newPaymentStatus: PaymentStatus = sale.paymentStatus as PaymentStatus;
+      if (sale.paidAmount >= newTotalAmount && newTotalAmount > 0) {
+        newPaymentStatus = "PAID";
+      } else if (sale.paidAmount > 0) {
+        newPaymentStatus = "PARTIAL";
+      } else {
+        newPaymentStatus = "UNPAID";
+      }
+
+      const deltaTotal = Number((newTotalAmount - sale.totalAmount).toFixed(2));
+
+      const updatedSale = await tx.sale.update({
+        where: { id: saleId },
+        data: {
+          subtotal: newSubtotal,
+          totalAmount: newTotalAmount,
+          balanceAmount: newBalanceAmount,
+          paymentStatus: newPaymentStatus,
         },
-        payments: true,
+        include: {
+          customer: true,
+          items: {
+            include: {
+              fishType: true,
+            },
+          },
+          payments: true,
+        },
+      });
+
+      // Update customer outstanding balance if financial total changed
+      if (deltaTotal !== 0) {
+        await tx.customer.update({
+          where: { id: sale.customerId },
+          data: {
+            outstandingBalance: {
+              increment: deltaTotal,
+            },
+          },
+        });
+      }
+
+      return {
+        updatedSale,
+        saleNumber: sale.saleNumber,
+        oldTotal: sale.totalAmount,
+        newTotal: newTotalAmount,
+        deltaTotal,
+      };
+    },
+    {
+      maxWait: 10000,
+      timeout: 30000,
+    }
+  );
+
+  if (userId) {
+    await logAuditEvent({
+      userId,
+      action: "UPDATE",
+      entity: "Sale",
+      entityId: saleId,
+      metadata: {
+        event: "Delivery spoilage recorded / updated",
+        saleNumber: result.saleNumber,
+        oldTotal: result.oldTotal,
+        newTotal: result.newTotal,
+        delta: result.deltaTotal,
       },
     });
+  }
 
-    // Update customer outstanding balance if financial total changed
-    if (deltaTotal !== 0) {
-      await tx.customer.update({
-        where: { id: sale.customerId },
-        data: {
-          outstandingBalance: {
-            increment: deltaTotal,
-          },
-        },
-      });
-    }
-
-    if (userId) {
-      await logAuditEvent({
-        userId,
-        action: "UPDATE",
-        entity: "Sale",
-        entityId: saleId,
-        metadata: {
-          event: "Delivery spoilage recorded / updated",
-          saleNumber: sale.saleNumber,
-          oldTotal: sale.totalAmount,
-          newTotal: newTotalAmount,
-          delta: deltaTotal,
-        },
-      });
-    }
-
-    return updatedSale;
-  });
+  return result.updatedSale;
 }
+
 
