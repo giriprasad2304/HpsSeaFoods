@@ -486,6 +486,9 @@ export async function updatePurchase(
       include: { items: true },
     });
 
+    const oldBalanceAmount = existing.balanceAmount;
+    const oldSupplierId = existing.supplierId;
+
     let totalWeightKg = existing.totalWeightKg;
     let subtotal = existing.subtotal;
     let transportCharges = validated.transportCharges ?? existing.transportCharges;
@@ -494,6 +497,11 @@ export async function updatePurchase(
     let totalAmount = existing.totalAmount;
     let balanceAmount = existing.balanceAmount;
     let paymentStatus = existing.paymentStatus;
+
+    // Recalculate if charges changed (even without item changes)
+    const chargesChanged = transportCharges !== existing.transportCharges ||
+      iceCharges !== existing.iceCharges ||
+      labourCharges !== existing.labourCharges;
 
     if (validated.items && validated.items.length > 0) {
       const totals = calculatePurchaseTotals(
@@ -548,12 +556,22 @@ export async function updatePurchase(
           },
         });
       }
+    } else if (chargesChanged) {
+      // Items not changed but charges changed — recalculate totals from existing items
+      subtotal = existing.subtotal;
+      totalAmount = Number((subtotal + transportCharges + iceCharges + labourCharges).toFixed(2));
+      balanceAmount = Number(Math.max(0, totalAmount - existing.paidAmount).toFixed(2));
+      if (balanceAmount <= 0 && totalAmount > 0) paymentStatus = "PAID";
+      else if (existing.paidAmount > 0 && existing.paidAmount < totalAmount) paymentStatus = "PARTIAL";
+      else if (existing.paidAmount <= 0) paymentStatus = "UNPAID";
     }
+
+    const newSupplierId = validated.supplierId ?? existing.supplierId;
 
     const updated = await tx.purchase.update({
       where: { id },
       data: {
-        supplierId: validated.supplierId ?? existing.supplierId,
+        supplierId: newSupplierId,
         purchaseDate: validated.purchaseDate ? new Date(validated.purchaseDate) : existing.purchaseDate,
         status: validated.status ?? existing.status,
         totalWeightKg,
@@ -575,12 +593,33 @@ export async function updatePurchase(
       },
     });
 
+    // Adjust supplier balance: remove old balance, add new balance
+    // If supplier changed, decrement old supplier and increment new one
+    if (newSupplierId !== oldSupplierId) {
+      await tx.supplier.update({
+        where: { id: oldSupplierId },
+        data: { balance: { decrement: oldBalanceAmount } },
+      });
+      await tx.supplier.update({
+        where: { id: newSupplierId },
+        data: { balance: { increment: balanceAmount } },
+      });
+    } else {
+      const balanceDelta = Number((balanceAmount - oldBalanceAmount).toFixed(2));
+      if (balanceDelta !== 0) {
+        await tx.supplier.update({
+          where: { id: oldSupplierId },
+          data: { balance: { increment: balanceDelta } },
+        });
+      }
+    }
+
     await logAuditEvent({
       userId,
       action: "PURCHASE_UPDATED",
       entity: "PURCHASE",
       entityId: id,
-      metadata: { totalAmount, totalWeightKg },
+      metadata: { totalAmount, totalWeightKg, oldTotal: existing.totalAmount },
     });
 
     return updated;
@@ -612,12 +651,22 @@ export async function deletePurchase(id: string, userId?: string) {
       where: { id },
     });
 
+    // Adjust supplier balance — decrement the outstanding balance that was owed
+    await tx.supplier.update({
+      where: { id: purchase.supplierId },
+      data: {
+        balance: {
+          decrement: purchase.balanceAmount,
+        },
+      },
+    });
+
     await logAuditEvent({
       userId,
       action: "PURCHASE_DELETED",
       entity: "PURCHASE",
       entityId: id,
-      metadata: { purchaseNumber: purchase.purchaseNumber },
+      metadata: { purchaseNumber: purchase.purchaseNumber, totalAmount: purchase.totalAmount },
     });
 
     return true;

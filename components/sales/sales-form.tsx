@@ -33,6 +33,7 @@ import type {
   FishTypeWithStockDTO,
   CreateSaleInput,
   SaleItemInput,
+  SaleDetailDTO,
   InventoryStockSummaryDTO,
   FishTypeDTO,
 } from "@/types";
@@ -40,6 +41,7 @@ import type {
 interface SalesFormProps {
   customers: CustomerDTO[];
   fishTypes: FishTypeWithStockDTO[];
+  initialData?: SaleDetailDTO;
 }
 
 const EMPTY_ITEM: SaleItemInput = {
@@ -58,8 +60,9 @@ const PAYMENT_METHODS = [
   { label: "Credit Card", value: "CREDIT_CARD" },
 ];
 
-export function SalesForm({ customers, fishTypes }: SalesFormProps) {
+export function SalesForm({ customers, fishTypes, initialData }: SalesFormProps) {
   const router = useRouter();
+  const isEditMode = Boolean(initialData);
   const [customerList, setCustomerList] = React.useState<CustomerDTO[]>(customers);
   const [fishTypeList, setFishTypeList] = React.useState<FishTypeWithStockDTO[]>(fishTypes);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
@@ -146,21 +149,39 @@ export function SalesForm({ customers, fishTypes }: SalesFormProps) {
     setTargetSpeciesRowIndex(null);
   };
 
-  // Form state
-  const [customerId, setCustomerId] = React.useState("");
+  // Form state — pre-fill from initialData when editing
+  const [customerId, setCustomerId] = React.useState(initialData?.customerId ?? "");
   const [saleDate, setSaleDate] = React.useState(
-    new Date().toISOString().slice(0, 16)
+    initialData?.saleDate
+      ? new Date(initialData.saleDate).toISOString().slice(0, 16)
+      : new Date().toISOString().slice(0, 16)
   );
-  const [deliveryDate, setDeliveryDate] = React.useState("");
-  const [deliveryStatus, setDeliveryStatus] = React.useState<CreateSaleInput["status"]>("CONFIRMED");
+  const [deliveryDate, setDeliveryDate] = React.useState(
+    initialData?.deliveryDate
+      ? new Date(initialData.deliveryDate).toISOString().slice(0, 16)
+      : ""
+  );
+  const [deliveryStatus, setDeliveryStatus] = React.useState<CreateSaleInput["status"]>(
+    initialData?.status ?? "CONFIRMED"
+  );
   const [paymentMethod, setPaymentMethod] = React.useState("BANK_TRANSFER");
-  const [initialPaidAmount, setInitialPaidAmount] = React.useState(0);
-  const [taxAmount, setTaxAmount] = React.useState(0);
-  const [discountAmount, setDiscountAmount] = React.useState(0);
-  const [notes, setNotes] = React.useState("");
-  const [items, setItems] = React.useState<SaleItemInput[]>([
-    { ...EMPTY_ITEM },
-  ]);
+  const [initialPaidAmount, setInitialPaidAmount] = React.useState(
+    isEditMode ? 0 : 0
+  );
+  const [taxAmount, setTaxAmount] = React.useState(initialData?.taxAmount ?? 0);
+  const [discountAmount, setDiscountAmount] = React.useState(initialData?.discountAmount ?? 0);
+  const [notes, setNotes] = React.useState(initialData?.notes ?? "");
+  const [items, setItems] = React.useState<SaleItemInput[]>(
+    initialData?.items && initialData.items.length > 0
+      ? initialData.items.map((item) => ({
+          fishTypeId: item.fishTypeId,
+          grade: item.grade || "Grade A",
+          weightKg: item.weightKg,
+          unitPricePerKg: item.unitPricePerKg,
+          notes: item.notes ?? null,
+        }))
+      : [{ ...EMPTY_ITEM }]
+  );
 
   // Invoice file upload state
   const [invoiceFile, setInvoiceFile] = React.useState<File | null>(null);
@@ -171,8 +192,14 @@ export function SalesForm({ customers, fishTypes }: SalesFormProps) {
   // Authoritative calculations on client preview
   const calculatedItems = items.map((item) => {
     const selectedFish = fishTypeList.find((f) => f.id === item.fishTypeId);
-    const availableStock = selectedFish ? selectedFish.availableStockKg : 0;
-    const isOverStock = item.fishTypeId && item.weightKg > availableStock;
+    let availableStock = selectedFish ? selectedFish.availableStockKg : 0;
+    if (initialData && item.fishTypeId) {
+      const originalAllocated = initialData.items
+        .filter((i) => i.fishTypeId === item.fishTypeId)
+        .reduce((sum, i) => sum + i.weightKg, 0);
+      availableStock += originalAllocated;
+    }
+    const isOverStock = Boolean(item.fishTypeId && item.weightKg > availableStock);
     return {
       ...item,
       totalPrice: Number((item.weightKg * item.unitPricePerKg).toFixed(2)),
@@ -190,7 +217,9 @@ export function SalesForm({ customers, fishTypes }: SalesFormProps) {
     0
   );
   const grandTotal = Math.max(0, subtotal + taxAmount - discountAmount);
-  const dueAmount = Math.max(0, grandTotal - initialPaidAmount);
+  const dueAmount = isEditMode
+    ? Math.max(0, grandTotal - (initialData?.paidAmount ?? 0))
+    : Math.max(0, grandTotal - initialPaidAmount);
 
   const paymentStatus =
     grandTotal > 0 && dueAmount <= 0
@@ -325,7 +354,7 @@ export function SalesForm({ customers, fishTypes }: SalesFormProps) {
         status: deliveryStatus,
         paymentStatus,
         paymentMethod: paymentMethod as CreateSaleInput["paymentMethod"],
-        initialPaidAmount,
+        initialPaidAmount: isEditMode ? undefined : initialPaidAmount,
         taxAmount,
         discountAmount,
         notes: notes || null,
@@ -336,22 +365,29 @@ export function SalesForm({ customers, fishTypes }: SalesFormProps) {
         items: validItems,
       };
 
-      const res = await fetch("/api/sales", {
-        method: "POST",
+      const url = isEditMode ? `/api/sales/${initialData!.id}` : "/api/sales";
+      const method = isEditMode ? "PATCH" : "POST";
+
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error || "Failed to create sale order");
+        throw new Error(err.error || `Failed to ${isEditMode ? "update" : "create"} sale order`);
       }
 
-      router.push("/sales");
+      if (isEditMode) {
+        router.push(`/sales/${initialData!.id}`);
+      } else {
+        router.push("/sales");
+      }
       router.refresh();
     } catch (err: unknown) {
       const message =
-        err instanceof Error ? err.message : "Failed to create sale order";
+        err instanceof Error ? err.message : `Failed to ${isEditMode ? "update" : "create"} sale order`;
       setError(message);
     } finally {
       setIsSubmitting(false);
@@ -374,10 +410,12 @@ export function SalesForm({ customers, fishTypes }: SalesFormProps) {
           </Button>
           <div>
             <h1 className="text-xl font-bold tracking-tight text-foreground">
-              New Sale & Invoice Order
+              {isEditMode ? `Edit ${initialData!.saleNumber}` : "New Sale & Invoice Order"}
             </h1>
             <p className="text-xs text-muted-foreground">
-              Create customer order, allocate stock, and issue outward dispatch
+              {isEditMode
+                ? "Update order details. Inventory and customer balance will be recalculated."
+                : "Create customer order, allocate stock, and issue outward dispatch"}
             </p>
           </div>
         </div>
@@ -392,7 +430,7 @@ export function SalesForm({ customers, fishTypes }: SalesFormProps) {
           ) : (
             <Save className="h-3.5 w-3.5" />
           )}
-          {isSubmitting ? "Generating..." : "Create Sale Order"}
+          {isSubmitting ? "Saving..." : isEditMode ? "Update Sale Order" : "Create Sale Order"}
         </Button>
       </div>
 
@@ -829,41 +867,60 @@ export function SalesForm({ customers, fishTypes }: SalesFormProps) {
           </Card>
 
           {/* Payment Terms */}
-          <Card>
-            <CardHeader className="pb-4">
-              <CardTitle className="text-sm">Payment Details</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">
-                  Payment Method
-                </label>
-                <Select
-                  value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value)}
-                  className="h-9 text-sm"
-                  options={PAYMENT_METHODS}
-                />
-              </div>
+          {!isEditMode ? (
+            <Card>
+              <CardHeader className="pb-4">
+                <CardTitle className="text-sm">Payment Details</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    Payment Method
+                  </label>
+                  <Select
+                    value={paymentMethod}
+                    onChange={(e) => setPaymentMethod(e.target.value)}
+                    className="h-9 text-sm"
+                    options={PAYMENT_METHODS}
+                  />
+                </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">
-                  Initial Payment Received ($)
-                </label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={initialPaidAmount || ""}
-                  onChange={(e) =>
-                    setInitialPaidAmount(parseFloat(e.target.value) || 0)
-                  }
-                  placeholder="0.00"
-                  className="h-9 text-sm font-mono"
-                />
-              </div>
-            </CardContent>
-          </Card>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    Initial Payment Received ($)
+                  </label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={initialPaidAmount || ""}
+                    onChange={(e) =>
+                      setInitialPaidAmount(parseFloat(e.target.value) || 0)
+                    }
+                    placeholder="0.00"
+                    className="h-9 text-sm font-mono"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardHeader className="pb-4">
+                <CardTitle className="text-sm">Payment Tracking</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-xs text-muted-foreground">
+                <p>
+                  Paid So Far:{" "}
+                  <span className="font-mono font-semibold text-foreground">
+                    {formatCurrency(initialData?.paidAmount ?? 0)}
+                  </span>
+                </p>
+                <p className="text-[11px]">
+                  Customer payments can be recorded and managed directly from the Sale Details page.
+                </p>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Authoritative Order Summary */}
           <Card className="border-primary/30 bg-primary/5">
@@ -906,12 +963,12 @@ export function SalesForm({ customers, fishTypes }: SalesFormProps) {
                 </div>
               </div>
 
-              {initialPaidAmount > 0 && (
+              {(isEditMode ? (initialData?.paidAmount ?? 0) > 0 : initialPaidAmount > 0) && (
                 <>
                   <div className="flex justify-between text-xs pt-1">
                     <span className="text-muted-foreground">Amount Paid</span>
                     <span className="font-mono text-success">
-                      -{formatCurrency(initialPaidAmount)}
+                      -{formatCurrency(isEditMode ? (initialData?.paidAmount ?? 0) : initialPaidAmount)}
                     </span>
                   </div>
                   <div className="flex justify-between text-xs font-semibold">

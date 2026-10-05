@@ -334,6 +334,13 @@ export function SaleDetails({ sale }: SaleDetailsProps) {
             </Button>
           </Link>
 
+          <Link href={`/sales/${sale.id}/edit`}>
+            <Button variant="outline" size="sm" className="gap-1.5 text-xs">
+              <Edit3 className="h-3.5 w-3.5 text-primary" />
+              Edit Sale
+            </Button>
+          </Link>
+
           <Button
             variant="outline"
             size="sm"

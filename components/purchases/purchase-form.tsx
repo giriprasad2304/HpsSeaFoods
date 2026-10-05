@@ -30,11 +30,13 @@ import type {
   FishTypeDTO,
   CreatePurchaseInput,
   PurchaseItemInput,
+  PurchaseDetailDTO,
 } from "@/types";
 
 interface PurchaseFormProps {
   suppliers: SupplierDTO[];
   fishTypes: FishTypeDTO[];
+  initialData?: PurchaseDetailDTO;
 }
 
 const EMPTY_ITEM: PurchaseItemInput = {
@@ -54,8 +56,9 @@ const PAYMENT_METHODS = [
   { label: "Credit Card", value: "CREDIT_CARD" },
 ];
 
-export function PurchaseForm({ suppliers, fishTypes }: PurchaseFormProps) {
+export function PurchaseForm({ suppliers, fishTypes, initialData }: PurchaseFormProps) {
   const router = useRouter();
+  const isEditMode = Boolean(initialData);
   const [supplierList, setSupplierList] = React.useState<SupplierDTO[]>(suppliers);
   const [fishTypeList, setFishTypeList] = React.useState<FishTypeDTO[]>(fishTypes);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
@@ -122,28 +125,53 @@ export function PurchaseForm({ suppliers, fishTypes }: PurchaseFormProps) {
   };
 
   // Form state
-  const [supplierId, setSupplierId] = React.useState("");
+  const [supplierId, setSupplierId] = React.useState(initialData?.supplierId ?? "");
   const [purchaseDate, setPurchaseDate] = React.useState(
-    new Date().toISOString().slice(0, 16)
+    initialData?.purchaseDate
+      ? new Date(initialData.purchaseDate).toISOString().slice(0, 16)
+      : new Date().toISOString().slice(0, 16)
   );
-  const [landingHarbor, setLandingHarbor] = React.useState("");
-  const [truckNumber, setTruckNumber] = React.useState("");
-  const [transportCharges, setTransportCharges] = React.useState(0);
-  const [iceCharges, setIceCharges] = React.useState(0);
-  const [labourCharges, setLabourCharges] = React.useState(0);
-  const [paymentMethod, setPaymentMethod] = React.useState("BANK_TRANSFER");
+  const [landingHarbor, setLandingHarbor] = React.useState(
+    initialData?.landingHarbor ?? ""
+  );
+  const [truckNumber, setTruckNumber] = React.useState(
+    initialData?.truckNumber ?? ""
+  );
+  const [transportCharges, setTransportCharges] = React.useState(
+    initialData?.transportCharges ?? 0
+  );
+  const [iceCharges, setIceCharges] = React.useState(
+    initialData?.iceCharges ?? 0
+  );
+  const [labourCharges, setLabourCharges] = React.useState(
+    initialData?.labourCharges ?? 0
+  );
+  const [paymentMethod, setPaymentMethod] = React.useState(
+    initialData?.paymentMethod ?? "BANK_TRANSFER"
+  );
   const [initialPaidAmount, setInitialPaidAmount] = React.useState(0);
-  const [notes, setNotes] = React.useState("");
-  const [items, setItems] = React.useState<PurchaseItemInput[]>([
-    { ...EMPTY_ITEM },
-  ]);
+  const [notes, setNotes] = React.useState(initialData?.notes ?? "");
+  const [items, setItems] = React.useState<PurchaseItemInput[]>(
+    initialData?.items && initialData.items.length > 0
+      ? initialData.items.map((item) => ({
+          fishTypeId: item.fishTypeId,
+          grade: item.grade || "Grade A",
+          weightKg: item.weightKg,
+          unitPricePerKg: item.unitPricePerKg,
+          temperatureC: item.temperatureC ?? null,
+          notes: item.notes ?? null,
+        }))
+      : [{ ...EMPTY_ITEM }]
+  );
 
   // Invoice file state
   const [invoiceFile, setInvoiceFile] = React.useState<File | null>(null);
   const [isUploading, setIsUploading] = React.useState(false);
-  const [invoiceUrl, setInvoiceUrl] = React.useState<string | null>(null);
+  const [invoiceUrl, setInvoiceUrl] = React.useState<string | null>(
+    initialData?.invoiceUrl ?? null
+  );
   const [invoiceFileName, setInvoiceFileName] = React.useState<string | null>(
-    null
+    initialData?.invoiceFileName ?? null
   );
 
   // Calculations
@@ -161,12 +189,14 @@ export function PurchaseForm({ suppliers, fishTypes }: PurchaseFormProps) {
     0
   );
   const grandTotal = subtotal + transportCharges + iceCharges + labourCharges;
-  const balanceAmount = Math.max(0, grandTotal - initialPaidAmount);
+  const dueAmount = isEditMode
+    ? Math.max(0, grandTotal - (initialData?.paidAmount ?? 0))
+    : Math.max(0, grandTotal - initialPaidAmount);
 
   const paymentStatus =
-    grandTotal > 0 && balanceAmount <= 0
+    grandTotal > 0 && dueAmount <= 0
       ? "PAID"
-      : initialPaidAmount > 0
+      : (isEditMode ? (initialData?.paidAmount ?? 0) : initialPaidAmount) > 0
       ? "PARTIAL"
       : "UNPAID";
 
@@ -298,7 +328,7 @@ export function PurchaseForm({ suppliers, fishTypes }: PurchaseFormProps) {
         iceCharges,
         labourCharges,
         paymentMethod: paymentMethod as CreatePurchaseInput["paymentMethod"],
-        initialPaidAmount,
+        initialPaidAmount: isEditMode ? undefined : initialPaidAmount,
         notes: notes || null,
         invoiceUrl,
         invoiceFileName,
@@ -307,22 +337,29 @@ export function PurchaseForm({ suppliers, fishTypes }: PurchaseFormProps) {
         items: validItems,
       };
 
-      const res = await fetch("/api/purchases", {
-        method: "POST",
+      const url = isEditMode ? `/api/purchases/${initialData!.id}` : "/api/purchases";
+      const method = isEditMode ? "PATCH" : "POST";
+
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error || "Failed to create purchase");
+        throw new Error(err.error || `Failed to ${isEditMode ? "update" : "create"} purchase`);
       }
 
-      router.push("/purchases");
+      if (isEditMode) {
+        router.push(`/purchases/${initialData!.id}`);
+      } else {
+        router.push("/purchases");
+      }
       router.refresh();
     } catch (err: unknown) {
       const message =
-        err instanceof Error ? err.message : "Failed to create purchase";
+        err instanceof Error ? err.message : `Failed to ${isEditMode ? "update" : "create"} purchase`;
       setError(message);
     } finally {
       setIsSubmitting(false);
@@ -345,10 +382,12 @@ export function PurchaseForm({ suppliers, fishTypes }: PurchaseFormProps) {
           </Button>
           <div>
             <h1 className="text-xl font-bold tracking-tight text-foreground">
-              Add New Purchase
+              {isEditMode ? `Edit ${initialData!.purchaseNumber}` : "Add New Purchase"}
             </h1>
             <p className="text-xs text-muted-foreground">
-              Enter the details of fish you bought today
+              {isEditMode
+                ? "Update intake details. Inventory and supplier balance will be recalculated."
+                : "Enter the details of fish you bought today"}
             </p>
           </div>
         </div>
@@ -363,7 +402,7 @@ export function PurchaseForm({ suppliers, fishTypes }: PurchaseFormProps) {
           ) : (
             <Save className="h-3.5 w-3.5" />
           )}
-          {isSubmitting ? "Saving..." : "Save Purchase"}
+          {isSubmitting ? "Saving..." : isEditMode ? "Update Purchase" : "Save Purchase"}
         </Button>
       </div>
 
@@ -821,41 +860,60 @@ export function PurchaseForm({ suppliers, fishTypes }: PurchaseFormProps) {
           </Card>
 
           {/* Payment */}
-          <Card>
-            <CardHeader className="pb-4">
-              <CardTitle className="text-sm">Payment</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">
-                  Payment Method
-                </label>
-                <Select
-                  value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value)}
-                  className="h-9 text-sm"
-                  options={PAYMENT_METHODS}
-                />
-              </div>
+          {!isEditMode ? (
+            <Card>
+              <CardHeader className="pb-4">
+                <CardTitle className="text-sm">Payment</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    Payment Method
+                  </label>
+                  <Select
+                    value={paymentMethod}
+                    onChange={(e) => setPaymentMethod(e.target.value as CreatePurchaseInput["paymentMethod"] & string)}
+                    className="h-9 text-sm"
+                    options={PAYMENT_METHODS}
+                  />
+                </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">
-                  Initial Payment Amount
-                </label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={initialPaidAmount || ""}
-                  onChange={(e) =>
-                    setInitialPaidAmount(parseFloat(e.target.value) || 0)
-                  }
-                  placeholder="0.00"
-                  className="h-9 text-sm font-mono"
-                />
-              </div>
-            </CardContent>
-          </Card>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    Initial Payment Amount
+                  </label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={initialPaidAmount || ""}
+                    onChange={(e) =>
+                      setInitialPaidAmount(parseFloat(e.target.value) || 0)
+                    }
+                    placeholder="0.00"
+                    className="h-9 text-sm font-mono"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardHeader className="pb-4">
+                <CardTitle className="text-sm">Payment Tracking</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-xs text-muted-foreground">
+                <p>
+                  Paid So Far:{" "}
+                  <span className="font-mono font-semibold text-foreground">
+                    {formatCurrency(initialData?.paidAmount ?? 0)}
+                  </span>
+                </p>
+                <p className="text-[11px]">
+                  Supplier payouts and disbursements can be recorded directly from the Purchase Details page.
+                </p>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Order Summary */}
           <Card className="border-primary/30 bg-primary/5">
@@ -912,18 +970,18 @@ export function PurchaseForm({ suppliers, fishTypes }: PurchaseFormProps) {
                 </div>
               </div>
 
-              {initialPaidAmount > 0 && (
+              {(isEditMode ? (initialData?.paidAmount ?? 0) > 0 : initialPaidAmount > 0) && (
                 <>
                   <div className="flex justify-between text-xs pt-1">
                     <span className="text-muted-foreground">Paid Amount</span>
                     <span className="font-mono text-success">
-                      -{formatCurrency(initialPaidAmount)}
+                      -{formatCurrency(isEditMode ? (initialData?.paidAmount ?? 0) : initialPaidAmount)}
                     </span>
                   </div>
                   <div className="flex justify-between text-xs font-semibold">
                     <span className="text-muted-foreground">Balance Due</span>
                     <span className="font-mono text-warning">
-                      {formatCurrency(balanceAmount)}
+                      {formatCurrency(dueAmount)}
                     </span>
                   </div>
                 </>

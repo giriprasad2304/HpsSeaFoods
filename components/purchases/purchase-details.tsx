@@ -15,6 +15,7 @@ import {
   Clock,
   Loader2,
   AlertTriangle,
+  Edit3,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -286,6 +287,13 @@ export function PurchaseDetails({ purchase }: PurchaseDetailsProps) {
               Record Payment
             </Button>
           )}
+
+          <Link href={`/purchases/${purchase.id}/edit`}>
+            <Button variant="outline" size="sm" className="gap-1.5 text-xs">
+              <Edit3 className="h-3.5 w-3.5 text-primary" />
+              Edit Purchase
+            </Button>
+          </Link>
 
           <Button
             variant="outline"

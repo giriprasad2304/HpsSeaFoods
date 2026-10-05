@@ -568,12 +568,18 @@ export async function updateSale(
       include: { items: true },
     });
 
+    const oldBalanceAmount = existing.balanceAmount;
+    const oldCustomerId = existing.customerId;
+
     let subtotal = existing.subtotal;
     let taxAmount = validated.taxAmount ?? existing.taxAmount;
     let discountAmount = validated.discountAmount ?? existing.discountAmount;
     let totalAmount = existing.totalAmount;
     let balanceAmount = existing.balanceAmount;
     let paymentStatus = existing.paymentStatus;
+
+    // Check if tax/discount changed even without item changes
+    const taxDiscountChanged = taxAmount !== existing.taxAmount || discountAmount !== existing.discountAmount;
 
     if (validated.items && validated.items.length > 0) {
       const totals = calculateSaleTotals(
@@ -596,6 +602,20 @@ export async function updateSale(
       await tx.saleItem.deleteMany({
         where: { saleId: id },
       });
+
+      // Stock verification for new items
+      for (const item of totals.calculatedItems) {
+        const availableStock = await getAvailableFishStock(item.fishTypeId, tx);
+        if (availableStock < item.weightKg) {
+          const fishType = await tx.fishType.findUnique({
+            where: { id: item.fishTypeId },
+          });
+          const fishLabel = fishType ? `${fishType.name} (${fishType.code})` : item.fishTypeId;
+          throw new Error(
+            `Insufficient inventory for ${fishLabel}. Available: ${availableStock} kg, Requested: ${item.weightKg} kg.`
+          );
+        }
+      }
 
       // Recreate updated items & negative inventory transactions
       for (const item of totals.calculatedItems) {
@@ -624,12 +644,21 @@ export async function updateSale(
           },
         });
       }
+    } else if (taxDiscountChanged) {
+      // Items not changed but tax/discount changed — recalculate totals
+      totalAmount = Number(Math.max(0, subtotal + taxAmount - discountAmount).toFixed(2));
+      balanceAmount = Number(Math.max(0, totalAmount - existing.paidAmount).toFixed(2));
+      if (balanceAmount <= 0 && totalAmount > 0) paymentStatus = "PAID";
+      else if (existing.paidAmount > 0 && existing.paidAmount < totalAmount) paymentStatus = "PARTIAL";
+      else if (existing.paidAmount <= 0) paymentStatus = "UNPAID";
     }
+
+    const newCustomerId = validated.customerId ?? existing.customerId;
 
     const updated = await tx.sale.update({
       where: { id },
       data: {
-        customerId: validated.customerId ?? existing.customerId,
+        customerId: newCustomerId,
         saleDate: validated.saleDate ? new Date(validated.saleDate) : existing.saleDate,
         deliveryDate: validated.deliveryDate !== undefined ? (validated.deliveryDate ? new Date(validated.deliveryDate) : null) : existing.deliveryDate,
         status: validated.status ?? existing.status,
@@ -643,12 +672,32 @@ export async function updateSale(
       },
     });
 
+    // Adjust customer outstanding balance
+    if (newCustomerId !== oldCustomerId) {
+      await tx.customer.update({
+        where: { id: oldCustomerId },
+        data: { outstandingBalance: { decrement: oldBalanceAmount } },
+      });
+      await tx.customer.update({
+        where: { id: newCustomerId },
+        data: { outstandingBalance: { increment: balanceAmount } },
+      });
+    } else {
+      const balanceDelta = Number((balanceAmount - oldBalanceAmount).toFixed(2));
+      if (balanceDelta !== 0) {
+        await tx.customer.update({
+          where: { id: oldCustomerId },
+          data: { outstandingBalance: { increment: balanceDelta } },
+        });
+      }
+    }
+
     await logAuditEvent({
       userId,
       action: "SALE_UPDATED",
       entity: "SALE",
       entityId: id,
-      metadata: { totalAmount, status: updated.status },
+      metadata: { totalAmount, status: updated.status, oldTotal: existing.totalAmount },
     });
 
     return updated;
