@@ -81,7 +81,7 @@ export interface SaleDetailDTO {
   customerId: string;
   customerName: string;
   customerCompany?: string | null;
-  customerPhone: string;
+  customerPhone?: string | null;
   customerEmail?: string | null;
   customerAddress?: string | null;
   saleDate: string;

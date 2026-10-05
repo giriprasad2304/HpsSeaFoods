@@ -109,12 +109,7 @@ export function SalesForm({ customers, fishTypes, initialData }: SalesFormProps)
   const [newCustomerData, setNewCustomerData] = React.useState({
     name: "",
     companyName: "",
-    phone: "",
-    email: "",
     deliveryAddress: "",
-    customerType: "Wholesale",
-    creditLimit: 50000,
-    paymentTermsDays: 15,
   });
 
   // Quick Add Species Dialog State
@@ -244,8 +239,8 @@ export function SalesForm({ customers, fishTypes, initialData }: SalesFormProps)
 
   async function handleCreateNewCustomer(e: React.FormEvent) {
     e.preventDefault();
-    if (!newCustomerData.name || !newCustomerData.phone) {
-      alert("Please provide at least a customer/company name and phone number.");
+    if (!newCustomerData.name.trim()) {
+      alert("Please provide at least a customer/buyer name.");
       return;
     }
 
@@ -269,12 +264,7 @@ export function SalesForm({ customers, fishTypes, initialData }: SalesFormProps)
       setNewCustomerData({
         name: "",
         companyName: "",
-        phone: "",
-        email: "",
         deliveryAddress: "",
-        customerType: "Wholesale",
-        creditLimit: 50000,
-        paymentTermsDays: 15,
       });
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : "Failed to create new customer");
@@ -1087,37 +1077,6 @@ export function SalesForm({ customers, fishTypes, initialData }: SalesFormProps)
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-foreground flex items-center gap-1">
-                <Phone className="h-3 w-3 text-muted-foreground" /> Phone Number *
-              </label>
-              <Input
-                placeholder="+91 98470 55443"
-                value={newCustomerData.phone}
-                onChange={(e) =>
-                  setNewCustomerData({ ...newCustomerData, phone: e.target.value })
-                }
-                required
-                className="h-8.5 text-xs"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                <Mail className="h-3 w-3 text-muted-foreground" /> Email Address
-              </label>
-              <Input
-                type="email"
-                placeholder="orders@apexocean.com"
-                value={newCustomerData.email}
-                onChange={(e) =>
-                  setNewCustomerData({ ...newCustomerData, email: e.target.value })
-                }
-                className="h-8.5 text-xs"
-              />
-            </div>
-          </div>
-
           <div className="space-y-1">
             <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
               <MapPin className="h-3 w-3 text-muted-foreground" /> Delivery / Warehouse Address
@@ -1130,40 +1089,6 @@ export function SalesForm({ customers, fishTypes, initialData }: SalesFormProps)
               }
               className="h-8.5 text-xs"
             />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">
-                Customer Type
-              </label>
-              <Select
-                value={newCustomerData.customerType}
-                onChange={(e) =>
-                  setNewCustomerData({ ...newCustomerData, customerType: e.target.value })
-                }
-                className="h-8.5 text-xs"
-              >
-                <option value="Wholesale">Wholesale Merchant</option>
-                <option value="Export">Export House</option>
-                <option value="Hotel/Restaurant">Hotel & Restaurant</option>
-                <option value="Retail">Retail Chain</option>
-                <option value="Distributor">Regional Distributor</option>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">
-                Credit Limit (₹)
-              </label>
-              <Input
-                type="number"
-                value={newCustomerData.creditLimit}
-                onChange={(e) =>
-                  setNewCustomerData({ ...newCustomerData, creditLimit: Number(e.target.value) })
-                }
-                className="h-8.5 text-xs font-mono"
-              />
-            </div>
           </div>
 
           <DialogFooter className="pt-3">

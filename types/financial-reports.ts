@@ -143,7 +143,7 @@ export interface CustomerReceivableRow {
   customerCode: string;
   customerName: string;
   companyName?: string | null;
-  phone: string;
+  phone?: string | null;
   totalSalesCount: number;
   totalBilled: number;
   totalPaid: number;
@@ -157,7 +157,7 @@ export interface SupplierPayableRow {
   supplierName: string;
   boatName?: string | null;
   harborLocation?: string | null;
-  phone: string;
+  phone?: string | null;
   totalPurchasesCount: number;
   totalProcured: number;
   totalPaid: number;

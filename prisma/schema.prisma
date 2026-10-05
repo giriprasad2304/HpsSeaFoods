@@ -92,7 +92,7 @@ model Supplier {
   harborLocation String?
   boatName       String?
   contactPerson  String?
-  phone          String
+  phone          String?
   email          String?
   taxNumber      String?
   address        String?
@@ -114,7 +114,7 @@ model Customer {
   companyName        String?
   customerType       String     @default("Wholesale")
   email              String?
-  phone              String
+  phone              String?
   deliveryAddress    String?
   creditLimit        Float      @default(50000.0)
   outstandingBalance Float      @default(0.0)

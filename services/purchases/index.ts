@@ -873,7 +873,7 @@ export const getPurchasesList = listPurchases;
  */
 export async function createSupplier(data: {
   name: string;
-  phone: string;
+  phone?: string;
   boatName?: string;
   harborLocation?: string;
   contactPerson?: string;
@@ -888,7 +888,7 @@ export async function createSupplier(data: {
     data: {
       code,
       name: data.name.trim(),
-      phone: data.phone.trim(),
+      phone: data.phone?.trim() || null,
       boatName: data.boatName?.trim() || null,
       harborLocation: data.harborLocation?.trim() || null,
       contactPerson: data.contactPerson?.trim() || null,

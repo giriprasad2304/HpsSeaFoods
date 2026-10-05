@@ -95,7 +95,7 @@ export interface PartyLedgerDTO {
     code: string;
     name: string;
     companyName?: string | null;
-    phone: string;
+    phone?: string | null;
     email?: string | null;
     address?: string | null;
     boatName?: string | null;

@@ -377,7 +377,7 @@ export async function getSaleById(id: string): Promise<SaleDetailDTO | null> {
 export async function createCustomer(data: {
   name: string;
   companyName?: string;
-  phone: string;
+  phone?: string;
   email?: string;
   deliveryAddress?: string;
   customerType?: string;
@@ -392,7 +392,7 @@ export async function createCustomer(data: {
       code,
       name: data.name.trim(),
       companyName: data.companyName?.trim() || null,
-      phone: data.phone.trim(),
+      phone: data.phone?.trim() || null,
       email: data.email?.trim() || null,
       deliveryAddress: data.deliveryAddress?.trim() || null,
       customerType: data.customerType || "Wholesale",

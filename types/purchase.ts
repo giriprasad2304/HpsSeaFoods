@@ -85,7 +85,7 @@ export interface PurchaseDetailDTO {
   purchaseNumber: string;
   supplierId: string;
   supplierName: string;
-  supplierPhone: string;
+  supplierPhone?: string | null;
   supplierBoatName?: string | null;
   purchaseDate: string;
   status: PurchaseStatus;

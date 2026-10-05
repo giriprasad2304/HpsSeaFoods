@@ -96,12 +96,9 @@ export function PurchaseForm({ suppliers, fishTypes, initialData }: PurchaseForm
   const [isCreatingSupplier, setIsCreatingSupplier] = React.useState(false);
   const [newSupplierData, setNewSupplierData] = React.useState({
     name: "",
-    phone: "",
     boatName: "",
-    harborLocation: "",
+    harborLocation: "Cochin Fisheries Harbour",
     contactPerson: "",
-    email: "",
-    taxNumber: "",
     address: "",
   });
 
@@ -220,8 +217,8 @@ export function PurchaseForm({ suppliers, fishTypes, initialData }: PurchaseForm
 
   async function handleCreateNewSupplier(e: React.FormEvent) {
     e.preventDefault();
-    if (!newSupplierData.name || !newSupplierData.phone) {
-      alert("Please provide at least a supplier/boat name and phone number.");
+    if (!newSupplierData.name.trim()) {
+      alert("Please provide at least a supplier or boat name.");
       return;
     }
 
@@ -247,12 +244,9 @@ export function PurchaseForm({ suppliers, fishTypes, initialData }: PurchaseForm
       setShowAddSupplier(false);
       setNewSupplierData({
         name: "",
-        phone: "",
         boatName: "",
         harborLocation: "Cochin Fisheries Harbour",
         contactPerson: "",
-        email: "",
-        taxNumber: "",
         address: "",
       });
     } catch (err: unknown) {
@@ -471,7 +465,9 @@ export function PurchaseForm({ suppliers, fishTypes, initialData }: PurchaseForm
                   </Select>
                   {selectedSupplier && (
                     <div className="text-[11px] text-muted-foreground mt-1 flex flex-wrap gap-x-3">
-                      <span>📞 {selectedSupplier.phone}</span>
+                      {selectedSupplier.phone && (
+                        <span>📞 {selectedSupplier.phone}</span>
+                      )}
                       {selectedSupplier.harborLocation && (
                         <span>⚓ {selectedSupplier.harborLocation}</span>
                       )}
@@ -1110,20 +1106,6 @@ export function PurchaseForm({ suppliers, fishTypes, initialData }: PurchaseForm
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
-              <label className="text-xs font-medium text-foreground flex items-center gap-1">
-                <Phone className="h-3 w-3 text-muted-foreground" /> Phone Number *
-              </label>
-              <Input
-                placeholder="+91 98471 22334"
-                value={newSupplierData.phone}
-                onChange={(e) =>
-                  setNewSupplierData({ ...newSupplierData, phone: e.target.value })
-                }
-                required
-                className="h-8.5 text-xs"
-              />
-            </div>
-            <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground">
                 Harbor / Landing Dock
               </label>
@@ -1136,9 +1118,6 @@ export function PurchaseForm({ suppliers, fishTypes, initialData }: PurchaseForm
                 className="h-8.5 text-xs"
               />
             </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground">
                 Contact Person
@@ -1148,20 +1127,6 @@ export function PurchaseForm({ suppliers, fishTypes, initialData }: PurchaseForm
                 value={newSupplierData.contactPerson}
                 onChange={(e) =>
                   setNewSupplierData({ ...newSupplierData, contactPerson: e.target.value })
-                }
-                className="h-8.5 text-xs"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                <Mail className="h-3 w-3 text-muted-foreground" /> Email (Optional)
-              </label>
-              <Input
-                type="email"
-                placeholder="antony@seafood.in"
-                value={newSupplierData.email}
-                onChange={(e) =>
-                  setNewSupplierData({ ...newSupplierData, email: e.target.value })
                 }
                 className="h-8.5 text-xs"
               />

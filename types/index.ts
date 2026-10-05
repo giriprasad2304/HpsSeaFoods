@@ -77,7 +77,7 @@ export interface SupplierDTO {
   harborLocation?: string | null;
   boatName?: string | null;
   contactPerson?: string | null;
-  phone: string;
+  phone?: string | null;
   email?: string | null;
   balance: number;
   rating: number;
@@ -90,7 +90,7 @@ export interface CustomerDTO {
   name: string;
   companyName?: string | null;
   customerType: string;
-  phone: string;
+  phone?: string | null;
   email?: string | null;
   deliveryAddress?: string | null;
   outstandingBalance: number;
