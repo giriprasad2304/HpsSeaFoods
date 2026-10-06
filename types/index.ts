@@ -157,6 +157,7 @@ export interface SaleDTO {
   status: SaleStatus;
   paymentStatus: PaymentStatus;
   subtotal: number;
+  iceCharges: number;
   railwayCharges: number;
   coverRopeCharges: number;
   thermocolBoxCharges: number;

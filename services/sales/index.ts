@@ -27,6 +27,7 @@ export function calculateSaleTotals<
   taxAmount = 0,
   discountAmount = 0,
   paidAmount = 0,
+  iceCharges = 0,
   railwayCharges = 0,
   coverRopeCharges = 0,
   thermocolBoxCharges = 0,
@@ -49,6 +50,7 @@ export function calculateSaleTotals<
     calculatedItems.reduce((sum, item) => sum + item.totalPrice, 0).toFixed(2)
   );
 
+  const iceChgs = Number((iceCharges || 0).toFixed(2));
   const rlyCharges = Number((railwayCharges || 0).toFixed(2));
   const cvrCharges = Number((coverRopeCharges || 0).toFixed(2));
   const boxCharges = Number((thermocolBoxCharges || 0).toFixed(2));
@@ -59,7 +61,7 @@ export function calculateSaleTotals<
   const totalAmount = Number(
     Math.max(
       0,
-      subtotal + rlyCharges + cvrCharges + boxCharges + pkgCharges + tax - discount
+      subtotal + iceChgs + rlyCharges + cvrCharges + boxCharges + pkgCharges + tax - discount
     ).toFixed(2)
   );
   const paid = Number((paidAmount || 0).toFixed(2));
@@ -76,6 +78,7 @@ export function calculateSaleTotals<
     calculatedItems,
     totalWeightKg,
     subtotal,
+    iceCharges: iceChgs,
     railwayCharges: rlyCharges,
     coverRopeCharges: cvrCharges,
     thermocolBoxCharges: boxCharges,
@@ -98,6 +101,7 @@ async function syncSaleExpenses(
     id: string;
     saleNumber: string;
     saleDate: Date;
+    iceCharges: number;
     railwayCharges: number;
     coverRopeCharges: number;
     thermocolBoxCharges: number;
@@ -114,6 +118,13 @@ async function syncSaleExpenses(
   });
 
   const charges = [
+    {
+      code: "EXP-CAT-ICE",
+      name: "Ice Cost",
+      description: "Tube ice, crushed ice & dry ice for packing and dispatch",
+      title: `Ice Charge - ${sale.saleNumber}`,
+      amount: sale.iceCharges,
+    },
     {
       code: "EXP-CAT-RLY",
       name: "Railway Freight / Charges",
@@ -288,6 +299,7 @@ export async function listSales(
       status: sale.status,
       paymentStatus: sale.paymentStatus,
       subtotal: sale.subtotal,
+      iceCharges: sale.iceCharges ?? 0,
       railwayCharges: sale.railwayCharges ?? 0,
       coverRopeCharges: sale.coverRopeCharges ?? 0,
       thermocolBoxCharges: sale.thermocolBoxCharges ?? 0,
@@ -424,6 +436,7 @@ export async function getSaleById(id: string): Promise<SaleDetailDTO | null> {
       deliveryDate: sale.deliveryDate?.toISOString() ?? null,
       status: sale.status,
       subtotal: sale.subtotal,
+      iceCharges: sale.iceCharges ?? 0,
       railwayCharges: sale.railwayCharges ?? 0,
       coverRopeCharges: sale.coverRopeCharges ?? 0,
       thermocolBoxCharges: sale.thermocolBoxCharges ?? 0,
@@ -544,6 +557,7 @@ export async function createSale(
     calculatedItems,
     totalWeightKg,
     subtotal,
+    iceCharges,
     railwayCharges,
     coverRopeCharges,
     thermocolBoxCharges,
@@ -559,6 +573,7 @@ export async function createSale(
     validated.taxAmount,
     validated.discountAmount,
     validated.initialPaidAmount,
+    validated.iceCharges,
     validated.railwayCharges,
     validated.coverRopeCharges,
     validated.thermocolBoxCharges,
@@ -581,6 +596,7 @@ export async function createSale(
           status: validated.status ?? "CONFIRMED",
           paymentStatus,
           subtotal,
+          iceCharges,
           railwayCharges,
           coverRopeCharges,
           thermocolBoxCharges,
@@ -644,11 +660,12 @@ export async function createSale(
         });
       }
 
-      // 4. Automatically synchronize expenses for railway, cover/rope, thermocol, and packing charges
+      // 4. Automatically synchronize expenses for ice, railway, cover/rope, thermocol, and packing charges
       await syncSaleExpenses(tx, {
         id: sale.id,
         saleNumber: sale.saleNumber,
         saleDate: sale.saleDate,
+        iceCharges,
         railwayCharges,
         coverRopeCharges,
         thermocolBoxCharges,
@@ -712,6 +729,7 @@ export async function updateSale(
       const oldCustomerId = existing.customerId;
 
       let subtotal = existing.subtotal;
+      let iceCharges = validated.iceCharges !== undefined ? validated.iceCharges : (existing.iceCharges ?? 0);
       let railwayCharges = validated.railwayCharges !== undefined ? validated.railwayCharges : (existing.railwayCharges ?? 0);
       let coverRopeCharges = validated.coverRopeCharges !== undefined ? validated.coverRopeCharges : (existing.coverRopeCharges ?? 0);
       let thermocolBoxCharges = validated.thermocolBoxCharges !== undefined ? validated.thermocolBoxCharges : (existing.thermocolBoxCharges ?? 0);
@@ -723,6 +741,7 @@ export async function updateSale(
       let paymentStatus = existing.paymentStatus;
 
       const adjustmentsChanged =
+        iceCharges !== (existing.iceCharges ?? 0) ||
         railwayCharges !== (existing.railwayCharges ?? 0) ||
         coverRopeCharges !== (existing.coverRopeCharges ?? 0) ||
         thermocolBoxCharges !== (existing.thermocolBoxCharges ?? 0) ||
@@ -736,12 +755,14 @@ export async function updateSale(
           taxAmount,
           discountAmount,
           existing.paidAmount,
+          iceCharges,
           railwayCharges,
           coverRopeCharges,
           thermocolBoxCharges,
           packingCharges
         );
         subtotal = totals.subtotal;
+        iceCharges = totals.iceCharges;
         railwayCharges = totals.railwayCharges;
         coverRopeCharges = totals.coverRopeCharges;
         thermocolBoxCharges = totals.thermocolBoxCharges;
@@ -796,7 +817,7 @@ export async function updateSale(
         totalAmount = Number(
           Math.max(
             0,
-            subtotal + railwayCharges + coverRopeCharges + thermocolBoxCharges + packingCharges + taxAmount - discountAmount
+            subtotal + iceCharges + railwayCharges + coverRopeCharges + thermocolBoxCharges + packingCharges + taxAmount - discountAmount
           ).toFixed(2)
         );
         balanceAmount = Number(Math.max(0, totalAmount - existing.paidAmount).toFixed(2));
@@ -815,6 +836,7 @@ export async function updateSale(
           deliveryDate: validated.deliveryDate !== undefined ? (validated.deliveryDate ? new Date(validated.deliveryDate) : null) : existing.deliveryDate,
           status: validated.status ?? existing.status,
           subtotal,
+          iceCharges,
           railwayCharges,
           coverRopeCharges,
           thermocolBoxCharges,
@@ -833,6 +855,7 @@ export async function updateSale(
         id: updated.id,
         saleNumber: updated.saleNumber,
         saleDate: updated.saleDate,
+        iceCharges,
         railwayCharges,
         coverRopeCharges,
         thermocolBoxCharges,

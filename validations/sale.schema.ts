@@ -33,6 +33,10 @@ export const createSaleSchema = z.object({
     .number()
     .nonnegative("Paid amount cannot be negative")
     .default(0),
+  iceCharges: z
+    .number()
+    .nonnegative("Ice charges cannot be negative")
+    .default(0),
   railwayCharges: z
     .number()
     .nonnegative("Railway charges cannot be negative")

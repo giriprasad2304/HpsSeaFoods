@@ -53,6 +53,7 @@ export interface CreateSaleInput {
   paymentStatus?: PaymentStatus;
   paymentMethod?: PaymentMethod;
   initialPaidAmount?: number;
+  iceCharges?: number;
   railwayCharges?: number;
   coverRopeCharges?: number;
   thermocolBoxCharges?: number;
@@ -92,6 +93,7 @@ export interface SaleDetailDTO {
   deliveryDate?: string | null;
   status: SaleStatus;
   subtotal: number;
+  iceCharges: number;
   railwayCharges: number;
   coverRopeCharges: number;
   thermocolBoxCharges: number;

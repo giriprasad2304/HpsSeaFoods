@@ -818,6 +818,13 @@ export function SaleDetails({ sale }: SaleDetailsProps) {
                 <span className="font-mono">{formatCurrency(sale.subtotal)}</span>
               </div>
 
+              {sale.iceCharges > 0 && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Ice Charges</span>
+                  <span className="font-mono">+{formatCurrency(sale.iceCharges)}</span>
+                </div>
+              )}
+
               {sale.railwayCharges > 0 && (
                 <div className="flex justify-between text-xs">
                   <span className="text-muted-foreground">Railway Charges</span>

@@ -164,6 +164,9 @@ export function SalesForm({ customers, fishTypes, initialData }: SalesFormProps)
   const [initialPaidAmount, setInitialPaidAmount] = React.useState(
     isEditMode ? 0 : 0
   );
+  const [iceCharges, setIceCharges] = React.useState(
+    initialData?.iceCharges ?? 0
+  );
   const [railwayCharges, setRailwayCharges] = React.useState(
     initialData?.railwayCharges ?? 0
   );
@@ -235,7 +238,7 @@ export function SalesForm({ customers, fishTypes, initialData }: SalesFormProps)
     0
   );
   const totalCharges =
-    railwayCharges + coverRopeCharges + thermocolBoxCharges + packingCharges;
+    iceCharges + railwayCharges + coverRopeCharges + thermocolBoxCharges + packingCharges;
   const grandTotal = Math.max(0, subtotal + totalCharges + taxAmount - discountAmount);
   const dueAmount = isEditMode
     ? Math.max(0, grandTotal - (initialData?.paidAmount ?? 0))
@@ -370,6 +373,7 @@ export function SalesForm({ customers, fishTypes, initialData }: SalesFormProps)
         paymentStatus,
         paymentMethod: paymentMethod as CreateSaleInput["paymentMethod"],
         initialPaidAmount: isEditMode ? undefined : initialPaidAmount,
+        iceCharges,
         railwayCharges,
         coverRopeCharges,
         thermocolBoxCharges,
@@ -886,6 +890,23 @@ export function SalesForm({ customers, fishTypes, initialData }: SalesFormProps)
             <CardContent className="space-y-3">
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-muted-foreground">
+                  Ice Charge (₹)
+                </label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={iceCharges || ""}
+                  onChange={(e) =>
+                    setIceCharges(parseFloat(e.target.value) || 0)
+                  }
+                  placeholder="0.00"
+                  className="h-8.5 text-xs font-mono"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">
                   Railway Charge (₹)
                 </label>
                 <Input
@@ -1030,6 +1051,13 @@ export function SalesForm({ customers, fishTypes, initialData }: SalesFormProps)
                 <span className="text-muted-foreground">Items Subtotal</span>
                 <span className="font-mono">{formatCurrency(subtotal)}</span>
               </div>
+
+              {iceCharges > 0 && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Ice Charges</span>
+                  <span className="font-mono">+{formatCurrency(iceCharges)}</span>
+                </div>
+              )}
 
               {railwayCharges > 0 && (
                 <div className="flex justify-between text-xs">

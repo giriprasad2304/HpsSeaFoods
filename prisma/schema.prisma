@@ -212,6 +212,7 @@ model Sale {
   status              SaleStatus    @default(DRAFT)
   paymentStatus       PaymentStatus @default(UNPAID)
   subtotal            Float         @default(0.0)
+  iceCharges          Float         @default(0.0)
   railwayCharges      Float         @default(0.0)
   coverRopeCharges    Float         @default(0.0)
   thermocolBoxCharges Float         @default(0.0)
