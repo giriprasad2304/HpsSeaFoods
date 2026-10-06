@@ -203,28 +203,32 @@ model PurchaseItem {
 }
 
 model Sale {
-  id             String        @id @default(cuid())
-  saleNumber     String        @unique
-  customerId     String
-  customer       Customer      @relation(fields: [customerId], references: [id])
-  saleDate       DateTime      @default(now())
-  deliveryDate   DateTime?
-  status         SaleStatus    @default(DRAFT)
-  paymentStatus  PaymentStatus @default(UNPAID)
-  subtotal       Float         @default(0.0)
-  taxAmount      Float         @default(0.0)
-  discountAmount Float         @default(0.0)
-  totalAmount    Float         @default(0.0)
-  paidAmount     Float         @default(0.0)
-  balanceAmount  Float         @default(0.0)
-  notes          String?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-  items          SaleItem[]
-  payments       Payment[]
-  packingCosts   PackingCost[]
-  expenses       Expense[]
-  invoice        Invoice?
+  id                  String        @id @default(cuid())
+  saleNumber          String        @unique
+  customerId          String
+  customer            Customer      @relation(fields: [customerId], references: [id])
+  saleDate            DateTime      @default(now())
+  deliveryDate        DateTime?
+  status              SaleStatus    @default(DRAFT)
+  paymentStatus       PaymentStatus @default(UNPAID)
+  subtotal            Float         @default(0.0)
+  railwayCharges      Float         @default(0.0)
+  coverRopeCharges    Float         @default(0.0)
+  thermocolBoxCharges Float         @default(0.0)
+  packingCharges      Float         @default(0.0)
+  taxAmount           Float         @default(0.0)
+  discountAmount      Float         @default(0.0)
+  totalAmount         Float         @default(0.0)
+  paidAmount          Float         @default(0.0)
+  balanceAmount       Float         @default(0.0)
+  notes               String?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  items               SaleItem[]
+  payments            Payment[]
+  packingCosts        PackingCost[]
+  expenses            Expense[]
+  invoice             Invoice?
 
   @@map("sales")
 }

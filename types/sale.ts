@@ -53,6 +53,10 @@ export interface CreateSaleInput {
   paymentStatus?: PaymentStatus;
   paymentMethod?: PaymentMethod;
   initialPaidAmount?: number;
+  railwayCharges?: number;
+  coverRopeCharges?: number;
+  thermocolBoxCharges?: number;
+  packingCharges?: number;
   taxAmount?: number;
   discountAmount?: number;
   notes?: string | null;
@@ -88,6 +92,10 @@ export interface SaleDetailDTO {
   deliveryDate?: string | null;
   status: SaleStatus;
   subtotal: number;
+  railwayCharges: number;
+  coverRopeCharges: number;
+  thermocolBoxCharges: number;
+  packingCharges: number;
   taxAmount: number;
   discountAmount: number;
   totalAmount: number;

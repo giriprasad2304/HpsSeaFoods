@@ -26,7 +26,11 @@ export function calculateSaleTotals<
   items: T[],
   taxAmount = 0,
   discountAmount = 0,
-  paidAmount = 0
+  paidAmount = 0,
+  railwayCharges = 0,
+  coverRopeCharges = 0,
+  thermocolBoxCharges = 0,
+  packingCharges = 0
 ) {
   const calculatedItems = items.map((item) => ({
     ...item,
@@ -45,11 +49,18 @@ export function calculateSaleTotals<
     calculatedItems.reduce((sum, item) => sum + item.totalPrice, 0).toFixed(2)
   );
 
+  const rlyCharges = Number((railwayCharges || 0).toFixed(2));
+  const cvrCharges = Number((coverRopeCharges || 0).toFixed(2));
+  const boxCharges = Number((thermocolBoxCharges || 0).toFixed(2));
+  const pkgCharges = Number((packingCharges || 0).toFixed(2));
   const tax = Number((taxAmount || 0).toFixed(2));
   const discount = Number((discountAmount || 0).toFixed(2));
 
   const totalAmount = Number(
-    Math.max(0, subtotal + tax - discount).toFixed(2)
+    Math.max(
+      0,
+      subtotal + rlyCharges + cvrCharges + boxCharges + pkgCharges + tax - discount
+    ).toFixed(2)
   );
   const paid = Number((paidAmount || 0).toFixed(2));
   const balanceAmount = Number(Math.max(0, totalAmount - paid).toFixed(2));
@@ -65,6 +76,10 @@ export function calculateSaleTotals<
     calculatedItems,
     totalWeightKg,
     subtotal,
+    railwayCharges: rlyCharges,
+    coverRopeCharges: cvrCharges,
+    thermocolBoxCharges: boxCharges,
+    packingCharges: pkgCharges,
     taxAmount: tax,
     discountAmount: discount,
     totalAmount,
@@ -72,6 +87,95 @@ export function calculateSaleTotals<
     balanceAmount,
     paymentStatus,
   };
+}
+
+/**
+ * Automatically synchronizes operational expenses for sales charges.
+ */
+async function syncSaleExpenses(
+  tx: any,
+  sale: {
+    id: string;
+    saleNumber: string;
+    saleDate: Date;
+    railwayCharges: number;
+    coverRopeCharges: number;
+    thermocolBoxCharges: number;
+    packingCharges: number;
+    paymentMethod?: string;
+  }
+) {
+  // Clean up previous auto-generated expenses for this sale order
+  await tx.expense.deleteMany({
+    where: {
+      saleId: sale.id,
+      notes: { contains: "[AUTO_SALE_CHARGE]" },
+    },
+  });
+
+  const charges = [
+    {
+      code: "EXP-CAT-RLY",
+      name: "Railway Freight / Charges",
+      description: "Railway cargo and freight charges for sales dispatch",
+      title: `Railway Charge - ${sale.saleNumber}`,
+      amount: sale.railwayCharges,
+    },
+    {
+      code: "EXP-CAT-CVR",
+      name: "Cover & Rope Charges",
+      description: "Cover sheets, plastic lining and securing ropes",
+      title: `Cover & Rope Charge - ${sale.saleNumber}`,
+      amount: sale.coverRopeCharges,
+    },
+    {
+      code: "EXP-CAT-BOX",
+      name: "Thermocol Boxes Cost",
+      description: "Insulated thermocol packaging boxes",
+      title: `Thermocol Box Charge - ${sale.saleNumber}`,
+      amount: sale.thermocolBoxCharges,
+    },
+    {
+      code: "EXP-CAT-PKG",
+      name: "Packing Charges",
+      description: "Packing labour and packaging processing charges",
+      title: `Packing Charge - ${sale.saleNumber}`,
+      amount: sale.packingCharges,
+    },
+  ];
+
+  for (const charge of charges) {
+    if (charge.amount > 0) {
+      let category = await tx.expenseCategory.findUnique({
+        where: { code: charge.code },
+      });
+      if (!category) {
+        category = await tx.expenseCategory.create({
+          data: {
+            code: charge.code,
+            name: charge.name,
+            description: charge.description,
+            isActive: true,
+          },
+        });
+      }
+
+      const expenseNumber = `EXP-${new Date().getFullYear()}-${String(Date.now()).slice(-5)}-${Math.floor(Math.random() * 900 + 100)}`;
+      await tx.expense.create({
+        data: {
+          expenseNumber,
+          categoryId: category.id,
+          title: charge.title,
+          description: `Automatic operational expense for ${charge.name.toLowerCase()} on sale order ${sale.saleNumber}`,
+          amount: Number(charge.amount.toFixed(2)),
+          paymentMethod: (sale.paymentMethod as any) || "CASH",
+          expenseDate: sale.saleDate,
+          saleId: sale.id,
+          notes: `[AUTO_SALE_CHARGE] Linked to ${sale.saleNumber}`,
+        },
+      });
+    }
+  }
 }
 
 /**
@@ -184,6 +288,10 @@ export async function listSales(
       status: sale.status,
       paymentStatus: sale.paymentStatus,
       subtotal: sale.subtotal,
+      railwayCharges: sale.railwayCharges ?? 0,
+      coverRopeCharges: sale.coverRopeCharges ?? 0,
+      thermocolBoxCharges: sale.thermocolBoxCharges ?? 0,
+      packingCharges: sale.packingCharges ?? 0,
       taxAmount: sale.taxAmount,
       discountAmount: sale.discountAmount,
       totalAmount: sale.totalAmount,
@@ -316,6 +424,10 @@ export async function getSaleById(id: string): Promise<SaleDetailDTO | null> {
       deliveryDate: sale.deliveryDate?.toISOString() ?? null,
       status: sale.status,
       subtotal: sale.subtotal,
+      railwayCharges: sale.railwayCharges ?? 0,
+      coverRopeCharges: sale.coverRopeCharges ?? 0,
+      thermocolBoxCharges: sale.thermocolBoxCharges ?? 0,
+      packingCharges: sale.packingCharges ?? 0,
       taxAmount: sale.taxAmount,
       discountAmount: sale.discountAmount,
       totalAmount: sale.totalAmount,
@@ -432,6 +544,10 @@ export async function createSale(
     calculatedItems,
     totalWeightKg,
     subtotal,
+    railwayCharges,
+    coverRopeCharges,
+    thermocolBoxCharges,
+    packingCharges,
     taxAmount,
     discountAmount,
     totalAmount,
@@ -442,7 +558,11 @@ export async function createSale(
     validated.items,
     validated.taxAmount,
     validated.discountAmount,
-    validated.initialPaidAmount
+    validated.initialPaidAmount,
+    validated.railwayCharges,
+    validated.coverRopeCharges,
+    validated.thermocolBoxCharges,
+    validated.packingCharges
   );
 
   const saleNumber =
@@ -461,6 +581,10 @@ export async function createSale(
           status: validated.status ?? "CONFIRMED",
           paymentStatus,
           subtotal,
+          railwayCharges,
+          coverRopeCharges,
+          thermocolBoxCharges,
+          packingCharges,
           taxAmount,
           discountAmount,
           totalAmount,
@@ -520,7 +644,19 @@ export async function createSale(
         });
       }
 
-      // 4. Update Customer outstanding balance
+      // 4. Automatically synchronize expenses for railway, cover/rope, thermocol, and packing charges
+      await syncSaleExpenses(tx, {
+        id: sale.id,
+        saleNumber: sale.saleNumber,
+        saleDate: sale.saleDate,
+        railwayCharges,
+        coverRopeCharges,
+        thermocolBoxCharges,
+        packingCharges,
+        paymentMethod: validated.paymentMethod,
+      });
+
+      // 5. Update Customer outstanding balance
       await tx.customer.update({
         where: { id: validated.customerId },
         data: {
@@ -538,7 +674,7 @@ export async function createSale(
     }
   );
 
-  // 5. Audit log
+  // 6. Audit log
   await logAuditEvent({
     userId,
     action: "SALE_CREATED",
@@ -576,23 +712,40 @@ export async function updateSale(
       const oldCustomerId = existing.customerId;
 
       let subtotal = existing.subtotal;
+      let railwayCharges = validated.railwayCharges !== undefined ? validated.railwayCharges : (existing.railwayCharges ?? 0);
+      let coverRopeCharges = validated.coverRopeCharges !== undefined ? validated.coverRopeCharges : (existing.coverRopeCharges ?? 0);
+      let thermocolBoxCharges = validated.thermocolBoxCharges !== undefined ? validated.thermocolBoxCharges : (existing.thermocolBoxCharges ?? 0);
+      let packingCharges = validated.packingCharges !== undefined ? validated.packingCharges : (existing.packingCharges ?? 0);
       let taxAmount = validated.taxAmount ?? existing.taxAmount;
       let discountAmount = validated.discountAmount ?? existing.discountAmount;
       let totalAmount = existing.totalAmount;
       let balanceAmount = existing.balanceAmount;
       let paymentStatus = existing.paymentStatus;
 
-      // Check if tax/discount changed even without item changes
-      const taxDiscountChanged = taxAmount !== existing.taxAmount || discountAmount !== existing.discountAmount;
+      const adjustmentsChanged =
+        railwayCharges !== (existing.railwayCharges ?? 0) ||
+        coverRopeCharges !== (existing.coverRopeCharges ?? 0) ||
+        thermocolBoxCharges !== (existing.thermocolBoxCharges ?? 0) ||
+        packingCharges !== (existing.packingCharges ?? 0) ||
+        taxAmount !== existing.taxAmount ||
+        discountAmount !== existing.discountAmount;
 
       if (validated.items && validated.items.length > 0) {
         const totals = calculateSaleTotals(
           validated.items,
           taxAmount,
           discountAmount,
-          existing.paidAmount
+          existing.paidAmount,
+          railwayCharges,
+          coverRopeCharges,
+          thermocolBoxCharges,
+          packingCharges
         );
         subtotal = totals.subtotal;
+        railwayCharges = totals.railwayCharges;
+        coverRopeCharges = totals.coverRopeCharges;
+        thermocolBoxCharges = totals.thermocolBoxCharges;
+        packingCharges = totals.packingCharges;
         taxAmount = totals.taxAmount;
         discountAmount = totals.discountAmount;
         totalAmount = totals.totalAmount;
@@ -638,9 +791,14 @@ export async function updateSale(
             },
           });
         }
-      } else if (taxDiscountChanged) {
-        // Items not changed but tax/discount changed — recalculate totals
-        totalAmount = Number(Math.max(0, subtotal + taxAmount - discountAmount).toFixed(2));
+      } else if (adjustmentsChanged) {
+        // Items not changed but charges/tax/discount changed — recalculate totals
+        totalAmount = Number(
+          Math.max(
+            0,
+            subtotal + railwayCharges + coverRopeCharges + thermocolBoxCharges + packingCharges + taxAmount - discountAmount
+          ).toFixed(2)
+        );
         balanceAmount = Number(Math.max(0, totalAmount - existing.paidAmount).toFixed(2));
         if (balanceAmount <= 0 && totalAmount > 0) paymentStatus = "PAID";
         else if (existing.paidAmount > 0 && existing.paidAmount < totalAmount) paymentStatus = "PARTIAL";
@@ -657,6 +815,10 @@ export async function updateSale(
           deliveryDate: validated.deliveryDate !== undefined ? (validated.deliveryDate ? new Date(validated.deliveryDate) : null) : existing.deliveryDate,
           status: validated.status ?? existing.status,
           subtotal,
+          railwayCharges,
+          coverRopeCharges,
+          thermocolBoxCharges,
+          packingCharges,
           taxAmount,
           discountAmount,
           totalAmount,
@@ -664,6 +826,18 @@ export async function updateSale(
           paymentStatus,
           notes: validated.notes !== undefined ? validated.notes : existing.notes,
         },
+      });
+
+      // Synchronize expenses for updated charges
+      await syncSaleExpenses(tx, {
+        id: updated.id,
+        saleNumber: updated.saleNumber,
+        saleDate: updated.saleDate,
+        railwayCharges,
+        coverRopeCharges,
+        thermocolBoxCharges,
+        packingCharges,
+        paymentMethod: validated.paymentMethod,
       });
 
       // Adjust customer outstanding balance

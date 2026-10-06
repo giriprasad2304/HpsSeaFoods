@@ -164,6 +164,18 @@ export function SalesForm({ customers, fishTypes, initialData }: SalesFormProps)
   const [initialPaidAmount, setInitialPaidAmount] = React.useState(
     isEditMode ? 0 : 0
   );
+  const [railwayCharges, setRailwayCharges] = React.useState(
+    initialData?.railwayCharges ?? 0
+  );
+  const [coverRopeCharges, setCoverRopeCharges] = React.useState(
+    initialData?.coverRopeCharges ?? 0
+  );
+  const [thermocolBoxCharges, setThermocolBoxCharges] = React.useState(
+    initialData?.thermocolBoxCharges ?? 0
+  );
+  const [packingCharges, setPackingCharges] = React.useState(
+    initialData?.packingCharges ?? 0
+  );
   const [taxAmount, setTaxAmount] = React.useState(initialData?.taxAmount ?? 0);
   const [discountAmount, setDiscountAmount] = React.useState(initialData?.discountAmount ?? 0);
   const [notes, setNotes] = React.useState(initialData?.notes ?? "");
@@ -222,7 +234,9 @@ export function SalesForm({ customers, fishTypes, initialData }: SalesFormProps)
     (sum, item) => sum + item.totalPrice,
     0
   );
-  const grandTotal = Math.max(0, subtotal + taxAmount - discountAmount);
+  const totalCharges =
+    railwayCharges + coverRopeCharges + thermocolBoxCharges + packingCharges;
+  const grandTotal = Math.max(0, subtotal + totalCharges + taxAmount - discountAmount);
   const dueAmount = isEditMode
     ? Math.max(0, grandTotal - (initialData?.paidAmount ?? 0))
     : Math.max(0, grandTotal - initialPaidAmount);
@@ -356,6 +370,10 @@ export function SalesForm({ customers, fishTypes, initialData }: SalesFormProps)
         paymentStatus,
         paymentMethod: paymentMethod as CreateSaleInput["paymentMethod"],
         initialPaidAmount: isEditMode ? undefined : initialPaidAmount,
+        railwayCharges,
+        coverRopeCharges,
+        thermocolBoxCharges,
+        packingCharges,
         taxAmount,
         discountAmount,
         notes: notes || null,
@@ -860,45 +878,83 @@ export function SalesForm({ customers, fishTypes, initialData }: SalesFormProps)
 
         {/* Right Column: Pricing & Payment Breakdown */}
         <div className="space-y-6">
-          {/* Tax & Discounts */}
+          {/* Dispatch & Packing Charges (Recorded to Order and Logged as Expenses) */}
           <Card>
-            <CardHeader className="pb-4">
-              <CardTitle className="text-sm">Adjustments & Taxes</CardTitle>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm">Dispatch & Packing Charges</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-muted-foreground">
-                  Tax Amount ($)
+                  Railway Charge (₹)
                 </label>
                 <Input
                   type="number"
                   step="0.01"
                   min="0"
-                  value={taxAmount || ""}
+                  value={railwayCharges || ""}
                   onChange={(e) =>
-                    setTaxAmount(parseFloat(e.target.value) || 0)
+                    setRailwayCharges(parseFloat(e.target.value) || 0)
                   }
                   placeholder="0.00"
-                  className="h-9 text-sm font-mono"
+                  className="h-8.5 text-xs font-mono"
                 />
               </div>
 
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-muted-foreground">
-                  Discount Amount ($)
+                  Cover & Rope Charge (₹)
                 </label>
                 <Input
                   type="number"
                   step="0.01"
                   min="0"
-                  value={discountAmount || ""}
+                  value={coverRopeCharges || ""}
                   onChange={(e) =>
-                    setDiscountAmount(parseFloat(e.target.value) || 0)
+                    setCoverRopeCharges(parseFloat(e.target.value) || 0)
                   }
                   placeholder="0.00"
-                  className="h-9 text-sm font-mono"
+                  className="h-8.5 text-xs font-mono"
                 />
               </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">
+                  Thermocol Box Charge (₹)
+                </label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={thermocolBoxCharges || ""}
+                  onChange={(e) =>
+                    setThermocolBoxCharges(parseFloat(e.target.value) || 0)
+                  }
+                  placeholder="0.00"
+                  className="h-8.5 text-xs font-mono"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">
+                  Packing Charge (₹)
+                </label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={packingCharges || ""}
+                  onChange={(e) =>
+                    setPackingCharges(parseFloat(e.target.value) || 0)
+                  }
+                  placeholder="0.00"
+                  className="h-8.5 text-xs font-mono"
+                />
+              </div>
+
+              <p className="text-[11px] text-muted-foreground pt-1 border-t border-border/60">
+                These charges are added to the sale invoice and automatically recorded as operational expenses.
+              </p>
             </CardContent>
           </Card>
 
@@ -923,7 +979,7 @@ export function SalesForm({ customers, fishTypes, initialData }: SalesFormProps)
 
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-muted-foreground">
-                    Initial Payment Received ($)
+                    Initial Payment Received (₹)
                   </label>
                   <Input
                     type="number"
@@ -974,6 +1030,31 @@ export function SalesForm({ customers, fishTypes, initialData }: SalesFormProps)
                 <span className="text-muted-foreground">Items Subtotal</span>
                 <span className="font-mono">{formatCurrency(subtotal)}</span>
               </div>
+
+              {railwayCharges > 0 && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Railway Charges</span>
+                  <span className="font-mono">+{formatCurrency(railwayCharges)}</span>
+                </div>
+              )}
+              {coverRopeCharges > 0 && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Cover & Rope Charges</span>
+                  <span className="font-mono">+{formatCurrency(coverRopeCharges)}</span>
+                </div>
+              )}
+              {thermocolBoxCharges > 0 && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Thermocol Box Charges</span>
+                  <span className="font-mono">+{formatCurrency(thermocolBoxCharges)}</span>
+                </div>
+              )}
+              {packingCharges > 0 && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Packing Charges</span>
+                  <span className="font-mono">+{formatCurrency(packingCharges)}</span>
+                </div>
+              )}
 
               {taxAmount > 0 && (
                 <div className="flex justify-between text-xs">

@@ -818,6 +818,31 @@ export function SaleDetails({ sale }: SaleDetailsProps) {
                 <span className="font-mono">{formatCurrency(sale.subtotal)}</span>
               </div>
 
+              {sale.railwayCharges > 0 && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Railway Charges</span>
+                  <span className="font-mono">+{formatCurrency(sale.railwayCharges)}</span>
+                </div>
+              )}
+              {sale.coverRopeCharges > 0 && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Cover & Rope Charges</span>
+                  <span className="font-mono">+{formatCurrency(sale.coverRopeCharges)}</span>
+                </div>
+              )}
+              {sale.thermocolBoxCharges > 0 && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Thermocol Box Charges</span>
+                  <span className="font-mono">+{formatCurrency(sale.thermocolBoxCharges)}</span>
+                </div>
+              )}
+              {sale.packingCharges > 0 && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Packing Charges</span>
+                  <span className="font-mono">+{formatCurrency(sale.packingCharges)}</span>
+                </div>
+              )}
+
               {sale.taxAmount > 0 && (
                 <div className="flex justify-between text-xs">
                   <span className="text-muted-foreground">Tax</span>

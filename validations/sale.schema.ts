@@ -33,6 +33,22 @@ export const createSaleSchema = z.object({
     .number()
     .nonnegative("Paid amount cannot be negative")
     .default(0),
+  railwayCharges: z
+    .number()
+    .nonnegative("Railway charges cannot be negative")
+    .default(0),
+  coverRopeCharges: z
+    .number()
+    .nonnegative("Cover and rope charges cannot be negative")
+    .default(0),
+  thermocolBoxCharges: z
+    .number()
+    .nonnegative("Thermocol box charges cannot be negative")
+    .default(0),
+  packingCharges: z
+    .number()
+    .nonnegative("Packing charges cannot be negative")
+    .default(0),
   taxAmount: z.number().nonnegative("Tax cannot be negative").default(0),
   discountAmount: z
     .number()
